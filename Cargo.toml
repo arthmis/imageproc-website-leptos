@@ -1,0 +1,33 @@
+[package]
+name = "image_proc_website_leptos"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "worker"
+
+[dependencies]
+console_error_panic_hook = "0.1.7"
+leptos = { version = "0.6.11", features = ["csr", "nightly"] }
+log = "0.4.21"
+wasm-logger = "0.2.0"
+js-sys = "0.3"
+wasm-bindgen = "0.2"
+
+[dependencies.web-sys]
+version = "0.3"
+features = [
+    "HtmlInputElement",
+    "File",
+    "FileList",
+    "HtmlImageElement",
+    # "Canvas",
+    "CanvasRenderingContext2d",
+    "HtmlCanvasElement",
+    'Worker',
+    "WorkerOptions",
+    "WorkerType",
+    "DedicatedWorkerGlobalScope",
+]
