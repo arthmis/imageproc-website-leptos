@@ -1,4 +1,5 @@
 mod views;
+use js_sys::Array;
 use leptos::html::{Canvas, Img, Input, ToHtmlElement};
 use leptos::leptos_dom::Text;
 use leptos::wasm_bindgen::JsCast;
@@ -63,8 +64,59 @@ fn App() -> impl IntoView {
     worker_options.type_(WorkerType::Module);
     let worker = Worker::new_with_options("./worker_loader.js", &worker_options).unwrap();
     worker.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
-    let (worker, set_worker) = create_signal(worker);
+    // let (worker, set_worker) = create_signal(worker);
     on_message.forget();
+
+    let on_load = move |ev| {
+        info!("{}", "image loaded");
+        let image_node = image_ref.get().unwrap();
+        let canvas = canvas_ref.get().unwrap();
+
+        let canvas_context = canvas
+            .get_context("2d")
+            .unwrap()
+            .unwrap()
+            .dyn_into::<CanvasRenderingContext2d>()
+            .unwrap();
+        let ((new_width, new_height), (center_x, center_y)) =
+            resize_image_for_canvas(&image_node, &canvas);
+        // need to clear canvas rect, if new image is smaller than the previous, or you will still see the old image
+        canvas_context.clear_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
+        canvas_context
+            .draw_image_with_html_image_element_and_dw_and_dh(
+                &image_node,
+                center_x,
+                center_y,
+                new_width,
+                new_height,
+            )
+            .unwrap();
+
+        let mut array: Array = Array::new();
+        // need to clone because once the context is called on the canvas
+        // it cannot be transferred to an offscreen canvas
+        let worker_canvas = canvas
+            .clone_node()
+            .unwrap()
+            .dyn_into::<HtmlCanvasElement>()
+            .unwrap();
+        let canvas_worker = worker_canvas.transfer_control_to_offscreen().unwrap();
+
+        array.push(&canvas_worker);
+        worker
+            .post_message_with_transfer(&canvas_worker, &array)
+            .unwrap();
+    };
+
+    let on_change = move |ev| {
+        let node = file_input_ref.get().unwrap();
+        let image_node = image_ref.get().unwrap();
+        let files = node.files().unwrap();
+        let file = files.item(0).unwrap();
+        let image_url_raw = Url::create_object_url_with_blob(&file).unwrap();
+        set_image_url(image_url_raw);
+        image_node.set_src(&image_url());
+    };
 
     view! {
         <NavBar/>
@@ -76,51 +128,14 @@ fn App() -> impl IntoView {
             class=""
             type="file"
             _ref=file_input_ref
-            on:change=move |ev| {
-                let node = file_input_ref.get().unwrap();
-                let image_node = image_ref.get().unwrap();
-                let files = node.files().unwrap();
-                let file = files.item(0).unwrap();
-                info!("{:?}", file.name());
-                let image_url_raw = Url::create_object_url_with_blob(&file).unwrap();
-                info!("{:?}", & image_url_raw);
-                set_image_url(image_url_raw);
-                image_node.set_src(&image_url());
-                info!("{:?}", image_node.src());
-            }
-
+            on:change=on_change
             style="display: none"
         />
         <img
             _ref=image_ref
             src=""
             style="display: none"
-            on:load=move |ev| {
-                info!("{}", "image loaded");
-                let image_node = image_ref.get().unwrap();
-                let canvas = canvas_ref.get().unwrap();
-                let canvas_context = canvas
-                    .get_context("2d")
-                    .unwrap()
-                    .unwrap()
-                    .dyn_into::<CanvasRenderingContext2d>()
-                    .unwrap();
-                let ((new_width, new_height), (center_x, center_y)) = resize_image_for_canvas(
-                    &image_node,
-                    &canvas,
-                );
-                // need to clear canvas rect, if new image is smaller than the previous, you will still see the old image
-                canvas_context.clear_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
-                canvas_context
-                    .draw_image_with_html_image_element_and_dw_and_dh(
-                        &image_node,
-                        center_x,
-                        center_y,
-                        new_width,
-                        new_height,
-                    )
-                    .unwrap();
-            }
+            on:load=on_load
         />
 
         <AlgorithmList set_algorithm=set_algorithm/>
@@ -145,6 +160,7 @@ fn resize_image_for_canvas(
     };
     let canvas_width_less_than_image_width = canvas_offset_width < image_width;
     let canvas_height_less_than_image_height = canvas_offset_height < image_height;
+
     let (new_width, new_height) =
         if canvas_width_less_than_image_width || canvas_height_less_than_image_height {
             (
@@ -154,6 +170,7 @@ fn resize_image_for_canvas(
         } else {
             (image_width, image_height)
         };
+
     let center_x = (canvas_offset_width as f64 - new_width) / 2.0;
     let center_y = (canvas_offset_height as f64 - new_height) / 2.0;
 
