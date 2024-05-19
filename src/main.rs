@@ -1,11 +1,14 @@
 mod views;
-use js_sys::Array;
+use std::str::FromStr;
+
+use js_sys::{Array, JsString, Object, Reflect, Uint8ClampedArray};
 use leptos::html::{Canvas, Img, Input, ToHtmlElement};
 use leptos::leptos_dom::Text;
 use leptos::wasm_bindgen::JsCast;
 use leptos::*;
 use leptos::{component, create_signal, svg::view, view, IntoView};
 use log::{error, info};
+use wasm_bindgen::JsValue;
 use web_sys::wasm_bindgen::closure::Closure;
 use web_sys::{
     CanvasRenderingContext2d, HtmlCanvasElement, HtmlImageElement, MessageEvent, Url, Worker,
@@ -103,8 +106,50 @@ fn App() -> impl IntoView {
         let canvas_worker = worker_canvas.transfer_control_to_offscreen().unwrap();
 
         array.push(&canvas_worker);
+        let image_data = canvas_context
+            .get_image_data(center_x, center_y, new_width, new_height)
+            .unwrap();
+        let raw_data = image_data.data();
+        let raw_data = Uint8ClampedArray::from(raw_data.0.as_ref());
+        array.push(&raw_data);
+        // TODO add image size and origin when sending image to worker
+        let mut message = Object::new();
+        Reflect::set(&message, &JsValue::from_str("image_data"), &image_data).unwrap();
+        Reflect::set(
+            &message,
+            &JsValue::from_str("message"),
+            &JsValue::from_str("IMAGE"),
+        )
+        .unwrap();
+        Reflect::set(
+            &message,
+            &JsValue::from_str("center_x"),
+            &JsValue::from_f64(center_x),
+        )
+        .unwrap();
+        Reflect::set(
+            &message,
+            &JsValue::from_str("center_y"),
+            &JsValue::from_f64(center_y),
+        )
+        .unwrap();
+        Reflect::set(
+            &message,
+            &JsValue::from_str("new_width"),
+            &JsValue::from_f64(new_width),
+        )
+        .unwrap();
+        Reflect::set(
+            &message,
+            &JsValue::from_str("new_height"),
+            &JsValue::from_f64(new_height),
+        )
+        .unwrap();
+        Reflect::set(&message, &JsValue::from_str("canvas"), &canvas_worker).unwrap();
+
         worker
-            .post_message_with_transfer(&canvas_worker, &array)
+            // .post_message_with_transfer(&canvas_worker, &array)
+            .post_message_with_transfer(&message, &array)
             .unwrap();
     };
 
