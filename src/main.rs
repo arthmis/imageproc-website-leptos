@@ -8,6 +8,7 @@ use leptos::wasm_bindgen::JsCast;
 use leptos::*;
 use leptos::{component, create_signal, svg::view, view, IntoView};
 use log::{error, info};
+use shared::Command;
 use wasm_bindgen::JsValue;
 use web_sys::wasm_bindgen::closure::Closure;
 use web_sys::{
@@ -112,7 +113,7 @@ fn App() -> impl IntoView {
         Reflect::set(
             &message,
             &JsValue::from_str("message"),
-            &JsValue::from_str("IMAGE"),
+            &JsValue::from_str(Command::NewImage.to_string().as_str()),
         )
         .unwrap();
         Reflect::set(
@@ -140,6 +141,9 @@ fn App() -> impl IntoView {
         )
         .unwrap();
 
+        // TODO transfer a cloned canvas
+        // this canvas will be used as an extra canvas that will be drawn to and displayed
+        // over the cavnas that is showing the unmodified image
         worker.post_message_with_transfer(&message, &array).unwrap();
     };
 
