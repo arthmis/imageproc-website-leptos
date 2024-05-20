@@ -7,7 +7,7 @@ edition = "2021"
 
 [lib]
 name = "shared"
-path = "src/lib.rs"
+path = "src/algorithms/lib.rs"
 
 [[bin]]
 name = "worker"
@@ -19,6 +19,8 @@ log = "0.4.21"
 wasm-logger = "0.2.0"
 js-sys = "0.3"
 wasm-bindgen = "0.2"
+image_processing = { git = "https://github.com/arthmis/image-processing.git" }
+image = "0.23.11"
 
 [dependencies.web-sys]
 version = "0.3"
@@ -28,8 +30,8 @@ features = [
     "File",
     "FileList",
     "HtmlImageElement",
-    "CanvasRenderingContext2d",
     "ImageData",
+    "CanvasRenderingContext2d",
     "OffscreenCanvasRenderingContext2d",
     "MessageEvent",
     "HtmlCanvasElement",
