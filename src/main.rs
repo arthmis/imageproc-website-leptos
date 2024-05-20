@@ -96,25 +96,19 @@ fn App() -> impl IntoView {
             .unwrap();
 
         let mut array: Array = Array::new();
-        // need to clone because once the context is called on the canvas
-        // it cannot be transferred to an offscreen canvas
-        let worker_canvas = canvas
-            .clone_node()
-            .unwrap()
-            .dyn_into::<HtmlCanvasElement>()
-            .unwrap();
-        let canvas_worker = worker_canvas.transfer_control_to_offscreen().unwrap();
-
-        array.push(&canvas_worker);
         let image_data = canvas_context
             .get_image_data(center_x, center_y, new_width, new_height)
             .unwrap();
         let raw_data = image_data.data();
         let raw_data = Uint8ClampedArray::from(raw_data.0.as_ref());
-        array.push(&raw_data);
-        // TODO add image size and origin when sending image to worker
+        array.push(&raw_data.buffer());
         let mut message = Object::new();
-        Reflect::set(&message, &JsValue::from_str("image_data"), &image_data).unwrap();
+        Reflect::set(
+            &message,
+            &JsValue::from_str("image_data"),
+            &raw_data.buffer(),
+        )
+        .unwrap();
         Reflect::set(
             &message,
             &JsValue::from_str("message"),
@@ -145,12 +139,8 @@ fn App() -> impl IntoView {
             &JsValue::from_f64(new_height),
         )
         .unwrap();
-        Reflect::set(&message, &JsValue::from_str("canvas"), &canvas_worker).unwrap();
 
-        worker
-            // .post_message_with_transfer(&canvas_worker, &array)
-            .post_message_with_transfer(&message, &array)
-            .unwrap();
+        worker.post_message_with_transfer(&message, &array).unwrap();
     };
 
     let on_change = move |ev| {

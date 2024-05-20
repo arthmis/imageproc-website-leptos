@@ -1,4 +1,4 @@
-use js_sys::{Array, Reflect, Uint8ClampedArray};
+use js_sys::{Array, ArrayBuffer, Reflect, Uint8ClampedArray};
 use log::info;
 use wasm_bindgen::{prelude::*, JsCast};
 use web_sys::{
@@ -26,14 +26,11 @@ fn main() {
             .unwrap();
         if &message == "IMAGE" {
             info!("{:?}", &msg.data());
-            let canvas = Reflect::get(&msg.data(), &JsValue::from_str("canvas"))
-                .unwrap()
-                .dyn_into::<OffscreenCanvas>()
-                .unwrap();
             let image_data = Reflect::get(&msg.data(), &JsValue::from_str("image_data"))
                 .unwrap()
-                .dyn_into::<Uint8ClampedArray>()
+                .dyn_into::<ArrayBuffer>()
                 .unwrap();
+            let image_data = Uint8ClampedArray::new(&image_data);
             let center_x = Reflect::get(&msg.data(), &JsValue::from_str("center_x"))
                 .unwrap()
                 .as_f64()
@@ -50,22 +47,21 @@ fn main() {
                 .unwrap()
                 .as_f64()
                 .unwrap();
-            // let canvas = msg.data().dyn_into::<OffscreenCanvas>().unwrap();
-            info!("{} {}", &canvas.height(), &canvas.width());
             info!("{} {}", center_x, center_y);
             info!("{} {}", image_width, image_height);
             info!("{:?}", image_data);
+            info!("{:?}", image_data.length());
 
-            let canvas_context = canvas
-                .get_context("2d")
-                .unwrap()
-                .unwrap()
-                .dyn_into::<OffscreenCanvasRenderingContext2d>()
-                .unwrap();
-            let image_data = canvas_context
-                .get_image_data(center_x, center_y, image_width, image_height)
-                .unwrap();
-            info!("{:?}", image_data.data().0);
+            // let canvas_context = canvas
+            //     .get_context("2d")
+            //     .unwrap()
+            //     .unwrap()
+            //     .dyn_into::<OffscreenCanvasRenderingContext2d>()
+            //     .unwrap();
+            // let image_data = canvas_context
+            //     .get_image_data(center_x, center_y, image_width, image_height)
+            //     .unwrap();
+            // info!("{:?}", image_data.data().0);
             // canvas_context.clear_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
             // let ((new_width, new_height), (center_x, center_y)) =
             //     resize_image_for_canvas(&image_node, &canvas);
