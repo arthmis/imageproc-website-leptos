@@ -59,12 +59,12 @@ impl FromStr for WorkerMessage {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            WORKER_INITIALIZED => Ok(Self::Initialized),
-            INVERT => Ok(Self::Invert),
-            BOX_BLUR => Ok(Self::BoxBlur),
-            GAMMA => Ok(Self::Gamma),
-            SOBEL_EDGE_DETECTOR => Ok(Self::SobelEdgeDetector),
+            "worker has finished initializing" => Ok(Self::Initialized),
             "original image" => Ok(Self::DisplayOriginalImage),
+            "invert" => Ok(Self::Invert),
+            "box blur" => Ok(Self::BoxBlur),
+            "gamma" => Ok(Self::Gamma),
+            "sobel edge detector" => Ok(Self::SobelEdgeDetector),
             _ => Err(format!("Unsupported/Unknown command: {}", s)),
         }
     }

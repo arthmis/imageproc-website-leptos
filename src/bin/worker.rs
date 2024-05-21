@@ -61,6 +61,7 @@ fn main() {
     let scope = std::rc::Rc::new(DedicatedWorkerGlobalScope::from(JsValue::from(
         js_sys::global(),
     )));
+    info!("worker name: {}", scope.name());
     let scope_clone = scope.clone();
 
     let on_message = Closure::wrap(Box::new(move |msg: MessageEvent| {
@@ -73,6 +74,7 @@ fn main() {
         let command = match Command::from_str(&input_message) {
             Ok(command) => command,
             Err(error) => {
+                info!("{}", &error);
                 scope_clone
                     .post_message(&JsValue::from_str(&error))
                     .unwrap();
@@ -157,7 +159,12 @@ fn main() {
                     &JsValue::from_str(worker_message.to_string().as_ref()),
                 )
                 .unwrap();
-                Reflect::set(&output_message, &JsValue::from_str("image_data"), &image).unwrap();
+                Reflect::set(
+                    &output_message,
+                    &JsValue::from_str("image_data"),
+                    &image.buffer(),
+                )
+                .unwrap();
                 Reflect::set(
                     &output_message,
                     &JsValue::from_str("width"),
@@ -177,17 +184,18 @@ fn main() {
             Command::SobelEdgeDetector => todo!(), // let canvas_context = canvas
         }
     }) as Box<dyn Fn(MessageEvent)>);
+
     scope.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
     on_message.forget();
 
-    let message = Object::new();
+    let output_message = Object::new();
     Reflect::set(
-        &message,
+        &output_message,
         &JsValue::from_str("message"),
         &JsValue::from_str(WorkerMessage::Initialized.to_string().as_ref()),
     )
     .unwrap();
-    scope.post_message(&message).unwrap();
+    scope.post_message(&output_message).unwrap();
 }
 
 // fn resize_image_for_canvas(

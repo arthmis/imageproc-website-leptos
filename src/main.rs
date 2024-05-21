@@ -68,6 +68,7 @@ fn App() -> impl IntoView {
                 .unwrap()
                 .as_string()
                 .unwrap();
+            info!("worker message: {}", message.as_str());
             let worker_message = WorkerMessage::from_str(&message).unwrap();
             info!("worker message: {}", worker_message.to_string());
             match worker_message {
@@ -77,13 +78,14 @@ fn App() -> impl IntoView {
                         let image_data =
                             Reflect::get(&message_event.data(), &JsValue::from_str("image_data"))
                                 .unwrap()
-                                .dyn_into::<ArrayBuffer>()
-                                .unwrap();
+                                .dyn_into::<Uint8ClampedArray>()
+                                .unwrap()
+                                .to_vec();
                         let width = Reflect::get(&message_event.data(), &JsValue::from_str("width"))
                             .unwrap()
                             .as_f64()
                             .unwrap() as u32;
-                        let image_data = Uint8ClampedArray::new(&image_data).to_vec();
+                        // let image_data = Uint8ClampedArray::new(&image_data).to_vec();
 
                         info!("{:?}", &wasm_bindgen::Clamped(&image_data));
                         ImageData::new_with_u8_clamped_array(
@@ -112,13 +114,14 @@ fn App() -> impl IntoView {
                         let image_data =
                             Reflect::get(&message_event.data(), &JsValue::from_str("image_data"))
                                 .unwrap()
-                                .dyn_into::<ArrayBuffer>()
-                                .unwrap();
+                                .dyn_into::<Uint8ClampedArray>()
+                                .unwrap()
+                                .to_vec();
                         let width = Reflect::get(&message_event.data(), &JsValue::from_str("width"))
                             .unwrap()
                             .as_f64()
                             .unwrap() as u32;
-                        let image_data = Uint8ClampedArray::new(&image_data).to_vec();
+                        // let image_data = Uint8ClampedArray::new(&image_data).to_vec();
 
                         info!("{:?}", &wasm_bindgen::Clamped(&image_data));
                         ImageData::new_with_u8_clamped_array(
