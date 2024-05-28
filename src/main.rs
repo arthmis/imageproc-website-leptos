@@ -9,6 +9,7 @@ use log::{error, info};
 use shared::{Command, WorkerMessage};
 use std::rc::Rc;
 use std::str::FromStr;
+use views::{Gamma, Invert};
 use wasm_bindgen::JsValue;
 use web_sys::wasm_bindgen::closure::Closure;
 use web_sys::{
@@ -22,7 +23,6 @@ enum Algorithm {
     Invert,
     BoxBlur,
     SobelEdgeDetector,
-    None,
 }
 
 impl std::fmt::Display for Algorithm {
@@ -32,7 +32,6 @@ impl std::fmt::Display for Algorithm {
             Algorithm::Invert => "invert",
             Algorithm::BoxBlur => "box blur",
             Algorithm::SobelEdgeDetector => "sobel edge detector",
-            Algorithm::None => "none",
         };
         write!(f, "{}", text)
     }
@@ -51,11 +50,18 @@ fn main() {
     leptos::mount_to_body(|| view! { <App/> })
 }
 
+// think about using create_effect instead of passing the worker as a prop
+// i can create the state for each algorithm in the main app component
+// pass those states like the gammma state, invert state into their respective components
+// create an effect where when those signals are updated in their respective components then
+// the effect function will post the message to the worker, this way only the app component has
+// to the worker
+// i think this way I wouldn't need a reference counter to the Worker because I don't need to share
+// it
 #[component]
 fn App() -> impl IntoView {
-    let (algorithm, set_algorithm) = create_signal(Algorithm::None);
+    let (algorithm, set_algorithm) = create_signal(Option::None);
     let (image_url, set_image_url) = create_signal("".to_string());
-    let (inverted, set_inverted) = create_signal(false);
     let file_input_ref = create_node_ref::<Input>();
     let image_ref = create_node_ref::<Img>();
     let selected_image_canvas = create_node_ref::<Canvas>();
@@ -68,28 +74,27 @@ fn App() -> impl IntoView {
                 .unwrap()
                 .as_string()
                 .unwrap();
-            info!("worker message: {}", message.as_str());
             let worker_message = WorkerMessage::from_str(&message).unwrap();
             info!("worker message: {}", worker_message.to_string());
             match worker_message {
                 WorkerMessage::Invert => {
                     info!("image was inverted, worker message");
                     let image_data = {
-                        let image_data =
-                            Reflect::get(&message_event.data(), &JsValue::from_str("image_data"))
+                        let image_data = Uint8ClampedArray::new(
+                            &Reflect::get(&message_event.data(), &JsValue::from_str("image_data"))
                                 .unwrap()
-                                .dyn_into::<Uint8ClampedArray>()
-                                .unwrap()
-                                .to_vec();
+                                .dyn_into::<ArrayBuffer>()
+                                .unwrap(),
+                        );
                         let width = Reflect::get(&message_event.data(), &JsValue::from_str("width"))
                             .unwrap()
                             .as_f64()
                             .unwrap() as u32;
                         // let image_data = Uint8ClampedArray::new(&image_data).to_vec();
 
-                        info!("{:?}", &wasm_bindgen::Clamped(&image_data));
+                        info!("{:?}", &wasm_bindgen::Clamped(image_data.to_vec()));
                         ImageData::new_with_u8_clamped_array(
-                            wasm_bindgen::Clamped(&image_data),
+                            wasm_bindgen::Clamped(&image_data.to_vec()),
                             width,
                         )
                         .unwrap()
@@ -106,26 +111,58 @@ fn App() -> impl IntoView {
                         .unwrap();
                 }
                 WorkerMessage::BoxBlur => todo!(),
-                WorkerMessage::Gamma => todo!(),
-                WorkerMessage::SobelEdgeDetector => todo!(),
-                WorkerMessage::DisplayOriginalImage => {
-                    info!("original image was returned, worker message");
+                WorkerMessage::Gamma => {
+                    info!("image gamma transformation completed, worker message");
                     let image_data = {
-                        let image_data =
-                            Reflect::get(&message_event.data(), &JsValue::from_str("image_data"))
+                        let image_data = Uint8ClampedArray::new(
+                            &Reflect::get(&message_event.data(), &JsValue::from_str("image_data"))
                                 .unwrap()
-                                .dyn_into::<Uint8ClampedArray>()
-                                .unwrap()
-                                .to_vec();
+                                .dyn_into::<ArrayBuffer>()
+                                .unwrap(),
+                        );
                         let width = Reflect::get(&message_event.data(), &JsValue::from_str("width"))
                             .unwrap()
                             .as_f64()
                             .unwrap() as u32;
                         // let image_data = Uint8ClampedArray::new(&image_data).to_vec();
 
-                        info!("{:?}", &wasm_bindgen::Clamped(&image_data));
+                        info!("{:?}", &wasm_bindgen::Clamped(image_data.to_vec()));
                         ImageData::new_with_u8_clamped_array(
-                            wasm_bindgen::Clamped(&image_data),
+                            wasm_bindgen::Clamped(&image_data.to_vec()),
+                            width,
+                        )
+                        .unwrap()
+                    };
+                    let selected_image = selected_image_canvas.get().unwrap();
+                    let canvas_context = selected_image
+                        .get_context("2d")
+                        .unwrap()
+                        .unwrap()
+                        .dyn_into::<CanvasRenderingContext2d>()
+                        .unwrap();
+                    canvas_context
+                        .put_image_data(&image_data, 0.0, 0.0)
+                        .unwrap();
+                }
+                WorkerMessage::SobelEdgeDetector => todo!(),
+                WorkerMessage::DisplayOriginalImage => {
+                    info!("original image was returned, worker message");
+                    let image_data = {
+                        let image_data = Uint8ClampedArray::new(
+                            &Reflect::get(&message_event.data(), &JsValue::from_str("image_data"))
+                                .unwrap()
+                                .dyn_into::<ArrayBuffer>()
+                                .unwrap(),
+                        );
+                        let width = Reflect::get(&message_event.data(), &JsValue::from_str("width"))
+                            .unwrap()
+                            .as_f64()
+                            .unwrap() as u32;
+                        // let image_data = Uint8ClampedArray::new(&image_data).to_vec();
+
+                        info!("{:?}", &wasm_bindgen::Clamped(&image_data.to_vec()));
+                        ImageData::new_with_u8_clamped_array(
+                            wasm_bindgen::Clamped(&image_data.to_vec()),
                             width,
                         )
                         .unwrap()
@@ -155,6 +192,10 @@ fn App() -> impl IntoView {
     on_message.forget();
     let onload_worker = worker.clone();
     let invert_worker = worker.clone();
+    let gamma_worker = worker.clone();
+    // let (value, set_value) = create_signal(0);
+
+    // let current_algorithm = move || if value() > 5 { "Big" } else { "Small" };
 
     let on_load = move |ev| {
         info!("{}", "image loaded");
@@ -295,25 +336,41 @@ fn App() -> impl IntoView {
         <AlgorithmList set_algorithm=set_algorithm/>
         <canvas _ref=selected_image_canvas id="selected-image"></canvas>
         <canvas _ref=modified_image_canvas id="modified-image"></canvas>
-        <button on:click=move |_| {
-            set_inverted(!inverted.get());
-            let mut message = Object::new();
-            Reflect::set(
-                &message,
-                &JsValue::from_str("message"),
-                &JsValue::from_str(Command::Invert.to_string().as_ref()),
-            )
-            .unwrap();
-            Reflect::set(
-                &message,
-                &JsValue::from_str(Command::Invert.to_string().as_ref()),
-                &JsValue::from_bool(inverted.get()),
-            )
-            .unwrap();
-            invert_worker.post_message(&message).unwrap();
-        }>
-            Invert
-        </button>
+        // <Gamma worker={gamma_worker}/>
+        // <Invert worker={invert_worker} />
+        // <p>{current_algorithm}</p>
+        // <AlgorithmSelect algorithm=algorithm/>
+        // {
+            // move || match algorithm() {
+            //     Some(current_algorithm) => Some(match current_algorithm {
+            //         Algorithm::Gamma => {
+            //             view! {<Gamma worker={gamma_worker}/>}},
+            //         Algorithm::Invert => {
+            //             view! {<Invert worker={invert_worker}/>}
+            //         },
+            //         Algorithm::BoxBlur => todo!(),
+            //         Algorithm::SobelEdgeDetector => todo!(),
+            //     }),
+            //     None => None,
+            // }
+        //     move || {
+        //         match algorithm() {
+        //             Some(current_algorithm) => match current_algorithm {
+        //                 Algorithm::Gamma => {
+        //                     Some(view! {<Gamma worker={gamma_worker}/>})
+        //                 },
+        //                 Algorithm::Invert => {
+        //                     Some(view! {<Invert worker={invert_worker}/>})
+        //                 },
+        //                 Algorithm::BoxBlur => todo!(),
+        //                 Algorithm::SobelEdgeDetector => todo!(),
+        //             },
+        //             None => None,
+        //         }
+        //     }
+        // }
+        <AlgorithmSelect algorithm=algorithm gamma_worker=gamma_worker invert_worker=invert_worker/>
+
     }
 }
 
@@ -352,6 +409,27 @@ fn resize_image_for_canvas(
 }
 
 #[component]
+fn AlgorithmSelect(
+    algorithm: ReadSignal<Option<Algorithm>>,
+    gamma_worker: Rc<Worker>,
+    invert_worker: Rc<Worker>,
+) -> impl IntoView {
+    view! {
+        <div>
+        { move || match algorithm() {
+            Some(current_algorithm) => Some(match current_algorithm {
+                Algorithm::Gamma => Gamma(views::GammaProps { worker: gamma_worker }),
+                Algorithm::Invert => Invert(views::InvertProps { worker: invert_worker}),
+                Algorithm::BoxBlur => todo!(),
+                Algorithm::SobelEdgeDetector => todo!(),
+            }),
+            None => None,
+        }}
+        </div>
+    }
+}
+
+#[component]
 fn NavBar() -> impl IntoView {
     view! {
         <nav class="navbar">
@@ -368,27 +446,25 @@ fn NavBar() -> impl IntoView {
 }
 
 #[component]
-fn AlgorithmList(set_algorithm: WriteSignal<Algorithm>) -> impl IntoView {
+fn AlgorithmList(set_algorithm: WriteSignal<Option<Algorithm>>) -> impl IntoView {
     let algorithms = vec![
-        ("Invert".to_string(), Algorithm::Invert),
-        ("Gamma".to_string(), Algorithm::Gamma),
-        ("Box Blur".to_string(), Algorithm::BoxBlur),
-        (
-            "Sobel Edge Detector".to_string(),
-            Algorithm::SobelEdgeDetector,
-        ),
+        Algorithm::Invert,
+        Algorithm::Gamma,
+        Algorithm::BoxBlur,
+        Algorithm::SobelEdgeDetector,
     ];
 
     view! {
         <ul>
             {algorithms
                 .into_iter()
-                .map(|(item, algorithm)| {
+                .map(|algorithm| {
                     view! {
                         <li>
                             <button on:click=move |_| {
-                                set_algorithm(algorithm);
-                            }>{item}</button>
+                                info!("set algorithm: {}", algorithm);
+                                set_algorithm(Some(algorithm));
+                            }>{algorithm.to_string()}</button>
                         </li>
                     }
                 })

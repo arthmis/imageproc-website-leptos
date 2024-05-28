@@ -9,7 +9,7 @@ use std::{
 use image_processing::pixel_ops::invert_mut;
 use shared::{algorithms, Command, WorkerMessage};
 
-use js_sys::{Array, ArrayBuffer, Boolean, Object, Reflect, Uint8ClampedArray};
+use js_sys::{Array, ArrayBuffer, Boolean, Number, Object, Reflect, Uint8ClampedArray};
 use log::info;
 use wasm_bindgen::{prelude::*, Clamped, JsCast};
 use web_sys::{
@@ -180,7 +180,60 @@ fn main() {
                     .unwrap();
             }
             Command::BoxBlur => todo!(),
-            Command::Gamma => todo!(),
+            Command::Gamma => {
+                info!("{}", Command::Gamma.to_string());
+                info!("{:?}", &msg.data());
+                let gamma_value =
+                    Reflect::get(&msg.data(), &JsValue::from_str(&Command::Gamma.to_string()))
+                        .unwrap()
+                        .dyn_into::<Number>()
+                        .unwrap()
+                        .as_f64()
+                        .unwrap();
+                info!("gamma value: {}", gamma_value);
+                let (image, width) = {
+                    let image = (*UNMODIFIED_IMAGE.lock().unwrap()).clone();
+                    if image.buffer().is_empty() {
+                        info!("no image selected to perform image processing");
+                        return;
+                    }
+                    info!("{:?}", &image);
+                    let width = image.width();
+                    (
+                        algorithms::gamma_transform(image.to_vec(), width, gamma_value as f32),
+                        width,
+                    )
+                };
+                // info!("{:?}", &image);
+                let image = Uint8ClampedArray::from(image.as_ref());
+                let mut output_message = Object::new();
+
+                Reflect::set(
+                    &output_message,
+                    &JsValue::from_str("message"),
+                    &JsValue::from_str(WorkerMessage::Gamma.to_string().as_ref()),
+                )
+                .unwrap();
+                Reflect::set(
+                    &output_message,
+                    &JsValue::from_str("image_data"),
+                    &image.buffer(),
+                )
+                .unwrap();
+                Reflect::set(
+                    &output_message,
+                    &JsValue::from_str("width"),
+                    &JsValue::from_f64(width as f64),
+                )
+                .unwrap();
+                info!("{:?}", &output_message);
+                let array: Array = Array::new();
+                array.push(&image.buffer());
+
+                scope_clone
+                    .post_message_with_transfer(&output_message, &array)
+                    .unwrap();
+            }
             Command::SobelEdgeDetector => todo!(), // let canvas_context = canvas
         }
     }) as Box<dyn Fn(MessageEvent)>);
