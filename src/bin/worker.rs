@@ -71,6 +71,7 @@ fn main() {
             .unwrap()
             .as_string()
             .unwrap();
+        info!("{}", &input_message);
         let command = match Command::from_str(&input_message) {
             Ok(command) => command,
             Err(error) => {
@@ -81,6 +82,7 @@ fn main() {
                 return;
             }
         };
+        info!("{}", command);
 
         match command {
             Command::NewImage => {
@@ -179,7 +181,63 @@ fn main() {
                     .post_message_with_transfer(&output_message, &array)
                     .unwrap();
             }
-            Command::BoxBlur => todo!(),
+            Command::BoxBlur => {
+                info!("{}", Command::BoxBlur.to_string());
+                info!("{:?}", &msg.data());
+                let box_blur_value = Reflect::get(
+                    &msg.data(),
+                    &JsValue::from_str(&Command::BoxBlur.to_string()),
+                )
+                .unwrap()
+                .dyn_into::<Number>()
+                .unwrap()
+                .as_f64()
+                .unwrap();
+                let box_blur_value = box_blur_value as u32;
+                info!("box blur value: {}", box_blur_value);
+                let (image, width) = {
+                    let image = (*UNMODIFIED_IMAGE.lock().unwrap()).clone();
+                    if image.buffer().is_empty() {
+                        info!("no image selected to perform image processing");
+                        return;
+                    }
+                    info!("{:?}", &image);
+                    let width = image.width();
+                    (
+                        algorithms::box_blur(image.to_vec(), width, box_blur_value),
+                        width,
+                    )
+                };
+                // info!("{:?}", &image);
+                let image = Uint8ClampedArray::from(image.as_ref());
+                let mut output_message = Object::new();
+
+                Reflect::set(
+                    &output_message,
+                    &JsValue::from_str("message"),
+                    &JsValue::from_str(WorkerMessage::BoxBlur.to_string().as_ref()),
+                )
+                .unwrap();
+                Reflect::set(
+                    &output_message,
+                    &JsValue::from_str("image_data"),
+                    &image.buffer(),
+                )
+                .unwrap();
+                Reflect::set(
+                    &output_message,
+                    &JsValue::from_str("width"),
+                    &JsValue::from_f64(width as f64),
+                )
+                .unwrap();
+                info!("{:?}", &output_message);
+                let array: Array = Array::new();
+                array.push(&image.buffer());
+
+                scope_clone
+                    .post_message_with_transfer(&output_message, &array)
+                    .unwrap();
+            }
             Command::Gamma => {
                 info!("{}", Command::Gamma.to_string());
                 info!("{:?}", &msg.data());

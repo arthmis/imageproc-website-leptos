@@ -9,7 +9,7 @@ use log::{error, info};
 use shared::{Command, WorkerMessage};
 use std::rc::Rc;
 use std::str::FromStr;
-use views::{Gamma, Invert};
+use views::{BoxBlur, Gamma, Invert, SobelEdgeDetector};
 use wasm_bindgen::JsValue;
 use web_sys::wasm_bindgen::closure::Closure;
 use web_sys::{
@@ -66,6 +66,10 @@ fn App() -> impl IntoView {
     let image_ref = create_node_ref::<Img>();
     let selected_image_canvas = create_node_ref::<Canvas>();
     let modified_image_canvas = create_node_ref::<Canvas>();
+    let gamma = create_rw_signal(1.);
+    let invert = create_rw_signal(false);
+    let box_blur_amount = create_rw_signal(1u32);
+    let sobel_edge_detector_threshold = create_rw_signal(128u8);
 
     let on_message: Closure<dyn FnMut(MessageEvent)> =
         Closure::new(move |message_event: MessageEvent| {
@@ -110,7 +114,38 @@ fn App() -> impl IntoView {
                         .put_image_data(&image_data, 0.0, 0.0)
                         .unwrap();
                 }
-                WorkerMessage::BoxBlur => todo!(),
+                WorkerMessage::BoxBlur => {
+                    info!("image box blur completed, worker message");
+                    let image_data = {
+                        let image_data = Uint8ClampedArray::new(
+                            &Reflect::get(&message_event.data(), &JsValue::from_str("image_data"))
+                                .unwrap()
+                                .dyn_into::<ArrayBuffer>()
+                                .unwrap(),
+                        );
+                        let width = Reflect::get(&message_event.data(), &JsValue::from_str("width"))
+                            .unwrap()
+                            .as_f64()
+                            .unwrap() as u32;
+
+                        info!("{:?}", &wasm_bindgen::Clamped(image_data.to_vec()));
+                        ImageData::new_with_u8_clamped_array(
+                            wasm_bindgen::Clamped(&image_data.to_vec()),
+                            width,
+                        )
+                        .unwrap()
+                    };
+                    let selected_image = selected_image_canvas.get().unwrap();
+                    let canvas_context = selected_image
+                        .get_context("2d")
+                        .unwrap()
+                        .unwrap()
+                        .dyn_into::<CanvasRenderingContext2d>()
+                        .unwrap();
+                    canvas_context
+                        .put_image_data(&image_data, 0.0, 0.0)
+                        .unwrap();
+                }
                 WorkerMessage::Gamma => {
                     info!("image gamma transformation completed, worker message");
                     let image_data = {
@@ -313,10 +348,78 @@ fn App() -> impl IntoView {
         image_node.set_src(&image_url());
     };
 
+    create_effect(move |_| match algorithm() {
+        Some(current_algorithm) => match current_algorithm {
+            Algorithm::Gamma => {
+                let mut message = Object::new();
+                Reflect::set(
+                    &message,
+                    &JsValue::from_str("message"),
+                    &JsValue::from_str(Command::Gamma.to_string().as_ref()),
+                )
+                .unwrap();
+                Reflect::set(
+                    &message,
+                    &JsValue::from_str(Command::Gamma.to_string().as_ref()),
+                    &JsValue::from_f64(gamma.get()),
+                )
+                .unwrap();
+                worker.post_message(&message).unwrap();
+            }
+            Algorithm::Invert => {
+                if invert.get() {
+                    let mut message = Object::new();
+                    Reflect::set(
+                        &message,
+                        &JsValue::from_str("message"),
+                        &JsValue::from_str(Command::Invert.to_string().as_ref()),
+                    )
+                    .unwrap();
+                    Reflect::set(
+                        &message,
+                        &JsValue::from_str(Command::Invert.to_string().as_ref()),
+                        &JsValue::from_bool(invert.get()),
+                    )
+                    .unwrap();
+                    worker.post_message(&message).unwrap();
+                }
+            }
+            Algorithm::BoxBlur => {
+                info!("box bluring");
+                let mut message = Object::new();
+                Reflect::set(
+                    &message,
+                    &JsValue::from_str("message"),
+                    &JsValue::from_str(Command::BoxBlur.to_string().as_ref()),
+                )
+                .unwrap();
+                Reflect::set(
+                    &message,
+                    &JsValue::from_str(Command::BoxBlur.to_string().as_ref()),
+                    &JsValue::from_f64(box_blur_amount.get() as f64),
+                )
+                .unwrap();
+                info!("sending box blur message: {}", box_blur_amount.get());
+                worker.post_message(&message).unwrap();
+            }
+            Algorithm::SobelEdgeDetector => todo!(),
+        },
+        None => (),
+    });
+    let current_algorithm = move || match algorithm() {
+        Some(current_algorithm) => match current_algorithm {
+            Algorithm::Gamma => Some(view! {<Gamma gamma=gamma/>}),
+            Algorithm::Invert => Some(view! {<Invert invert=invert/>}),
+            Algorithm::BoxBlur => Some(view! {<BoxBlur box_blur_amount=box_blur_amount/>}),
+            Algorithm::SobelEdgeDetector => Some(view! {<SobelEdgeDetector />}),
+        },
+        None => None,
+    };
+
     view! {
         <NavBar/>
         <label for="file-selection" class="some-custom-css">
-            Select Image
+            "Select Image"
         </label>
         <input
             id="file-selection"
@@ -340,36 +443,8 @@ fn App() -> impl IntoView {
         // <Invert worker={invert_worker} />
         // <p>{current_algorithm}</p>
         // <AlgorithmSelect algorithm=algorithm/>
-        // {
-            // move || match algorithm() {
-            //     Some(current_algorithm) => Some(match current_algorithm {
-            //         Algorithm::Gamma => {
-            //             view! {<Gamma worker={gamma_worker}/>}},
-            //         Algorithm::Invert => {
-            //             view! {<Invert worker={invert_worker}/>}
-            //         },
-            //         Algorithm::BoxBlur => todo!(),
-            //         Algorithm::SobelEdgeDetector => todo!(),
-            //     }),
-            //     None => None,
-            // }
-        //     move || {
-        //         match algorithm() {
-        //             Some(current_algorithm) => match current_algorithm {
-        //                 Algorithm::Gamma => {
-        //                     Some(view! {<Gamma worker={gamma_worker}/>})
-        //                 },
-        //                 Algorithm::Invert => {
-        //                     Some(view! {<Invert worker={invert_worker}/>})
-        //                 },
-        //                 Algorithm::BoxBlur => todo!(),
-        //                 Algorithm::SobelEdgeDetector => todo!(),
-        //             },
-        //             None => None,
-        //         }
-        //     }
-        // }
-        <AlgorithmSelect algorithm=algorithm gamma_worker=gamma_worker invert_worker=invert_worker/>
+        {current_algorithm}
+        // <AlgorithmSelect algorithm=algorithm gamma_worker=gamma_worker invert_worker=invert_worker/>
 
     }
 }
@@ -409,27 +484,6 @@ fn resize_image_for_canvas(
 }
 
 #[component]
-fn AlgorithmSelect(
-    algorithm: ReadSignal<Option<Algorithm>>,
-    gamma_worker: Rc<Worker>,
-    invert_worker: Rc<Worker>,
-) -> impl IntoView {
-    view! {
-        <div>
-        { move || match algorithm() {
-            Some(current_algorithm) => Some(match current_algorithm {
-                Algorithm::Gamma => Gamma(views::GammaProps { worker: gamma_worker }),
-                Algorithm::Invert => Invert(views::InvertProps { worker: invert_worker}),
-                Algorithm::BoxBlur => todo!(),
-                Algorithm::SobelEdgeDetector => todo!(),
-            }),
-            None => None,
-        }}
-        </div>
-    }
-}
-
-#[component]
 fn NavBar() -> impl IntoView {
     view! {
         <nav class="navbar">
@@ -439,7 +493,7 @@ fn NavBar() -> impl IntoView {
 
             <a href="https://github.com/arthmis/imageproc-website">
                 <i class="fa fa-github" aria-hidden="true" style="font-size:1.4em;"></i>
-                Github
+                "Github"
             </a>
         </nav>
     }
