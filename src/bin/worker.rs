@@ -7,7 +7,7 @@ use std::{
 };
 
 use image_processing::pixel_ops::invert_mut;
-use shared::{algorithms, Command, WorkerMessage};
+use shared::{algorithms, Command, WorkerResponseMessage};
 
 use js_sys::{Array, ArrayBuffer, Boolean, Number, Object, Reflect, Uint8ClampedArray};
 use log::info;
@@ -142,10 +142,14 @@ fn main() {
                         (
                             algorithms::invert(image.to_vec(), width),
                             width,
-                            WorkerMessage::Invert,
+                            WorkerResponseMessage::Invert,
                         )
                     } else {
-                        (image.to_vec(), width, WorkerMessage::DisplayOriginalImage)
+                        (
+                            image.to_vec(),
+                            width,
+                            WorkerResponseMessage::DisplayOriginalImage,
+                        )
                     }
                 };
                 let image = Uint8ClampedArray::from(image.as_ref());
@@ -210,7 +214,7 @@ fn main() {
                 Reflect::set(
                     &output_message,
                     &JsValue::from_str("message"),
-                    &JsValue::from_str(WorkerMessage::BoxBlur.to_string().as_ref()),
+                    &JsValue::from_str(WorkerResponseMessage::BoxBlur.to_string().as_ref()),
                 )
                 .unwrap();
                 Reflect::set(
@@ -263,7 +267,7 @@ fn main() {
                 Reflect::set(
                     &output_message,
                     &JsValue::from_str("message"),
-                    &JsValue::from_str(WorkerMessage::Gamma.to_string().as_ref()),
+                    &JsValue::from_str(WorkerResponseMessage::Gamma.to_string().as_ref()),
                 )
                 .unwrap();
                 Reflect::set(
@@ -297,7 +301,7 @@ fn main() {
     Reflect::set(
         &output_message,
         &JsValue::from_str("message"),
-        &JsValue::from_str(WorkerMessage::Initialized.to_string().as_ref()),
+        &JsValue::from_str(WorkerResponseMessage::Initialized.to_string().as_ref()),
     )
     .unwrap();
     scope.post_message(&output_message).unwrap();

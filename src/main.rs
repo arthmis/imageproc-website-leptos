@@ -6,7 +6,10 @@ use leptos::wasm_bindgen::JsCast;
 use leptos::*;
 use leptos::{component, create_signal, svg::view, view, IntoView};
 use log::{error, info};
-use shared::{Command, WorkerMessage};
+use shared::{
+    BoxBlurMessage, Command, GammaMessage, InvertMessage, NewImageMessage,
+    SobelEdgeDetectionMessage, ToJsObject, WorkerResponseMessage,
+};
 use std::rc::Rc;
 use std::str::FromStr;
 use views::{BoxBlur, Gamma, Invert, SobelEdgeDetector};
@@ -77,10 +80,10 @@ fn App() -> impl IntoView {
                 .unwrap()
                 .as_string()
                 .unwrap();
-            let worker_message = WorkerMessage::from_str(&message).unwrap();
+            let worker_message = WorkerResponseMessage::from_str(&message).unwrap();
             info!("worker message: {}", worker_message.to_string());
             match worker_message {
-                WorkerMessage::Invert => {
+                WorkerResponseMessage::Invert => {
                     info!("image was inverted, worker message");
                     let image_data = {
                         let image_data = Uint8ClampedArray::new(
@@ -112,7 +115,7 @@ fn App() -> impl IntoView {
                         .put_image_data(&image_data, 0.0, 0.0)
                         .unwrap();
                 }
-                WorkerMessage::BoxBlur => {
+                WorkerResponseMessage::BoxBlur => {
                     info!("image box blur completed, worker message");
                     let image_data = {
                         let image_data = Uint8ClampedArray::new(
@@ -144,7 +147,7 @@ fn App() -> impl IntoView {
                         .put_image_data(&image_data, 0.0, 0.0)
                         .unwrap();
                 }
-                WorkerMessage::Gamma => {
+                WorkerResponseMessage::Gamma => {
                     info!("image gamma transformation completed, worker message");
                     let image_data = {
                         let image_data = Uint8ClampedArray::new(
@@ -176,8 +179,8 @@ fn App() -> impl IntoView {
                         .put_image_data(&image_data, 0.0, 0.0)
                         .unwrap();
                 }
-                WorkerMessage::SobelEdgeDetector => todo!(),
-                WorkerMessage::DisplayOriginalImage => {
+                WorkerResponseMessage::SobelEdgeDetector => todo!(),
+                WorkerResponseMessage::DisplayOriginalImage => {
                     info!("original image was returned, worker message");
                     let image_data = {
                         let image_data = Uint8ClampedArray::new(
@@ -225,11 +228,6 @@ fn App() -> impl IntoView {
         info!("{}", "image loaded");
         let image_node = image_ref.get().unwrap();
         let selected_image = selected_image_canvas.get().unwrap();
-        info!(
-            "ui thread canvas, width: {}, height: {}",
-            selected_image.width(),
-            selected_image.height()
-        );
 
         let canvas_context = selected_image
             .get_context("2d")
@@ -259,52 +257,23 @@ fn App() -> impl IntoView {
         let image_data = canvas_context
             .get_image_data(center_x, center_y, new_width, new_height)
             .unwrap();
+
         // reset current algorithm to be None for a new image
         set_algorithm(None);
-        let raw_data = image_data.data();
-        let raw_data = Uint8ClampedArray::from(raw_data.0.as_ref());
+
+        let new_image_message = NewImageMessage::new(
+            Command::NewImage.to_string(),
+            image_data.data(),
+            center_x,
+            center_y,
+            new_width,
+            new_height,
+        );
         let mut array: Array = Array::new();
-        array.push(&raw_data.buffer());
-        let mut message = Object::new();
-        Reflect::set(
-            &message,
-            &JsValue::from_str("image_data"),
-            &raw_data.buffer(),
-        )
-        .unwrap();
-        Reflect::set(
-            &message,
-            &JsValue::from_str("message"),
-            &JsValue::from_str(Command::NewImage.to_string().as_str()),
-        )
-        .unwrap();
-        Reflect::set(
-            &message,
-            &JsValue::from_str("center_x"),
-            &JsValue::from_f64(center_x),
-        )
-        .unwrap();
-        Reflect::set(
-            &message,
-            &JsValue::from_str("center_y"),
-            &JsValue::from_f64(center_y),
-        )
-        .unwrap();
-        Reflect::set(
-            &message,
-            &JsValue::from_str("new_width"),
-            &JsValue::from_f64(new_width),
-        )
-        .unwrap();
-        Reflect::set(
-            &message,
-            &JsValue::from_str("new_height"),
-            &JsValue::from_f64(new_height),
-        )
-        .unwrap();
+        array.push(&new_image_message.js_clamped_uint8_array().buffer());
 
         onload_worker
-            .post_message_with_transfer(&message, &array)
+            .post_message_with_transfer(&new_image_message.to_js_object(), &array)
             .unwrap();
     };
 
@@ -321,58 +290,27 @@ fn App() -> impl IntoView {
     create_effect(move |_| match algorithm() {
         Some(current_algorithm) => match current_algorithm {
             Algorithm::Gamma => {
-                let mut message = Object::new();
-                Reflect::set(
-                    &message,
-                    &JsValue::from_str("message"),
-                    &JsValue::from_str(Command::Gamma.to_string().as_ref()),
-                )
-                .unwrap();
-                Reflect::set(
-                    &message,
-                    &JsValue::from_str(Command::Gamma.to_string().as_ref()),
-                    &JsValue::from_f64(gamma.get()),
-                )
-                .unwrap();
+                let message =
+                    GammaMessage::new(Command::Gamma.to_string(), gamma.get()).to_js_object();
                 worker.post_message(&message).unwrap();
             }
             Algorithm::Invert => {
-                let mut message = Object::new();
-                Reflect::set(
-                    &message,
-                    &JsValue::from_str("message"),
-                    &JsValue::from_str(Command::Invert.to_string().as_ref()),
-                )
-                .unwrap();
-                Reflect::set(
-                    &message,
-                    &JsValue::from_str(Command::Invert.to_string().as_ref()),
-                    &JsValue::from_bool(invert.get()),
-                )
-                .unwrap();
-                info!("{:?}", &invert.get());
+                let message =
+                    InvertMessage::new(Command::Invert.to_string(), invert.get()).to_js_object();
                 worker.post_message(&message).unwrap();
             }
             Algorithm::BoxBlur => {
-                info!("box bluring");
-                let mut message = Object::new();
-                Reflect::set(
-                    &message,
-                    &JsValue::from_str("message"),
-                    &JsValue::from_str(Command::BoxBlur.to_string().as_ref()),
-                )
-                .unwrap();
-                Reflect::set(
-                    &message,
-                    &JsValue::from_str(Command::BoxBlur.to_string().as_ref()),
-                    &JsValue::from_f64(box_blur_amount.get() as f64),
-                )
-                .unwrap();
-                info!("sending box blur message: {}", box_blur_amount.get());
+                let message =
+                    BoxBlurMessage::new(Command::BoxBlur.to_string(), box_blur_amount.get())
+                        .to_js_object();
                 worker.post_message(&message).unwrap();
             }
             Algorithm::SobelEdgeDetector => {
                 info!("changed algorithm to sobel edge detector");
+                // let message =
+                //     SobelEdgeDetectionMessage::new(Command::SobelEdgeDetector.to_string(), sobel_edge_detector_threshold.get())
+                //         .to_js_object();
+                // worker.post_message(&message).unwrap();
             }
         },
         None => (),
