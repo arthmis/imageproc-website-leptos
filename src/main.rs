@@ -81,13 +81,16 @@ fn App() -> impl IntoView {
                 .as_string()
                 .unwrap();
             let worker_message = WorkerResponseMessage::from_str(&message).unwrap();
-            info!("worker message: {}", worker_message.to_string());
             match worker_message {
+                WorkerResponseMessage::Initialized => {
+                    info!("worker message: {}", worker_message.to_string());
+                }
                 WorkerResponseMessage::Invert
                 | WorkerResponseMessage::BoxBlur
                 | WorkerResponseMessage::Gamma
                 | WorkerResponseMessage::DisplayOriginalImage
                 | WorkerResponseMessage::SobelEdgeDetector => {
+                    info!("worker message: {}", worker_message.to_string());
                     let image_data = {
                         let image_data = Uint8ClampedArray::new(
                             &Reflect::get(&message_event.data(), &JsValue::from_str("image_data"))
