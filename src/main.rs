@@ -83,8 +83,11 @@ fn App() -> impl IntoView {
             let worker_message = WorkerResponseMessage::from_str(&message).unwrap();
             info!("worker message: {}", worker_message.to_string());
             match worker_message {
-                WorkerResponseMessage::Invert => {
-                    info!("image was inverted, worker message");
+                WorkerResponseMessage::Invert
+                | WorkerResponseMessage::BoxBlur
+                | WorkerResponseMessage::Gamma
+                | WorkerResponseMessage::DisplayOriginalImage
+                | WorkerResponseMessage::SobelEdgeDetector => {
                     let image_data = {
                         let image_data = Uint8ClampedArray::new(
                             &Reflect::get(&message_event.data(), &JsValue::from_str("image_data"))
@@ -115,104 +118,9 @@ fn App() -> impl IntoView {
                         .put_image_data(&image_data, 0.0, 0.0)
                         .unwrap();
                 }
-                WorkerResponseMessage::BoxBlur => {
-                    info!("image box blur completed, worker message");
-                    let image_data = {
-                        let image_data = Uint8ClampedArray::new(
-                            &Reflect::get(&message_event.data(), &JsValue::from_str("image_data"))
-                                .unwrap()
-                                .dyn_into::<ArrayBuffer>()
-                                .unwrap(),
-                        );
-                        let width = Reflect::get(&message_event.data(), &JsValue::from_str("width"))
-                            .unwrap()
-                            .as_f64()
-                            .unwrap() as u32;
-
-                        info!("{:?}", &wasm_bindgen::Clamped(image_data.to_vec()));
-                        ImageData::new_with_u8_clamped_array(
-                            wasm_bindgen::Clamped(&image_data.to_vec()),
-                            width,
-                        )
-                        .unwrap()
-                    };
-                    let selected_image = selected_image_canvas.get().unwrap();
-                    let canvas_context = selected_image
-                        .get_context("2d")
-                        .unwrap()
-                        .unwrap()
-                        .dyn_into::<CanvasRenderingContext2d>()
-                        .unwrap();
-                    canvas_context
-                        .put_image_data(&image_data, 0.0, 0.0)
-                        .unwrap();
+                _ => {
+                    panic!("unknown worker response message: {}", worker_message);
                 }
-                WorkerResponseMessage::Gamma => {
-                    info!("image gamma transformation completed, worker message");
-                    let image_data = {
-                        let image_data = Uint8ClampedArray::new(
-                            &Reflect::get(&message_event.data(), &JsValue::from_str("image_data"))
-                                .unwrap()
-                                .dyn_into::<ArrayBuffer>()
-                                .unwrap(),
-                        );
-                        let width = Reflect::get(&message_event.data(), &JsValue::from_str("width"))
-                            .unwrap()
-                            .as_f64()
-                            .unwrap() as u32;
-
-                        info!("{:?}", &wasm_bindgen::Clamped(image_data.to_vec()));
-                        ImageData::new_with_u8_clamped_array(
-                            wasm_bindgen::Clamped(&image_data.to_vec()),
-                            width,
-                        )
-                        .unwrap()
-                    };
-                    let selected_image = selected_image_canvas.get().unwrap();
-                    let canvas_context = selected_image
-                        .get_context("2d")
-                        .unwrap()
-                        .unwrap()
-                        .dyn_into::<CanvasRenderingContext2d>()
-                        .unwrap();
-                    canvas_context
-                        .put_image_data(&image_data, 0.0, 0.0)
-                        .unwrap();
-                }
-                WorkerResponseMessage::SobelEdgeDetector => todo!(),
-                WorkerResponseMessage::DisplayOriginalImage => {
-                    info!("original image was returned, worker message");
-                    let image_data = {
-                        let image_data = Uint8ClampedArray::new(
-                            &Reflect::get(&message_event.data(), &JsValue::from_str("image_data"))
-                                .unwrap()
-                                .dyn_into::<ArrayBuffer>()
-                                .unwrap(),
-                        );
-                        let width = Reflect::get(&message_event.data(), &JsValue::from_str("width"))
-                            .unwrap()
-                            .as_f64()
-                            .unwrap() as u32;
-
-                        info!("{:?}", &wasm_bindgen::Clamped(&image_data.to_vec()));
-                        ImageData::new_with_u8_clamped_array(
-                            wasm_bindgen::Clamped(&image_data.to_vec()),
-                            width,
-                        )
-                        .unwrap()
-                    };
-                    let selected_image = selected_image_canvas.get().unwrap();
-                    let canvas_context = selected_image
-                        .get_context("2d")
-                        .unwrap()
-                        .unwrap()
-                        .dyn_into::<CanvasRenderingContext2d>()
-                        .unwrap();
-                    canvas_context
-                        .put_image_data(&image_data, 0.0, 0.0)
-                        .unwrap();
-                }
-                _ => {}
             }
         });
 
@@ -259,7 +167,12 @@ fn App() -> impl IntoView {
             .unwrap();
 
         // reset current algorithm to be None for a new image
+        // reset algorithm values
+        // TODO look into making this a function or something
         set_algorithm(None);
+        invert.set(false);
+        box_blur_amount.set(1);
+        gamma.set(1.);
 
         let new_image_message = NewImageMessage::new(
             Command::NewImage.to_string(),
@@ -315,6 +228,7 @@ fn App() -> impl IntoView {
         },
         None => (),
     });
+
     let current_algorithm = move || match algorithm() {
         Some(current_algorithm) => match current_algorithm {
             Algorithm::Gamma => Some(view! {<Gamma gamma=gamma/>}),
