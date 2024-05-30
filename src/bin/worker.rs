@@ -19,7 +19,6 @@ use web_sys::{
 
 /// this unmodified image will be used to perform nondestructive image processing
 /// evertime a new command comes in, this image will be cloned and then processed
-// static UNMODIFIED_IMAGE: LazyLock<Mutex<Vec<u8>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 static UNMODIFIED_IMAGE: LazyLock<Mutex<RawImage>> =
     LazyLock::new(|| Mutex::new(RawImage::new(Vec::new(), 0)));
 
@@ -61,11 +60,10 @@ fn main() {
     let scope = std::rc::Rc::new(DedicatedWorkerGlobalScope::from(JsValue::from(
         js_sys::global(),
     )));
-    info!("worker name: {}", scope.name());
     let scope_clone = scope.clone();
 
     let on_message = Closure::wrap(Box::new(move |msg: MessageEvent| {
-        web_sys::console::log_1(&"got message".into());
+        web_sys::console::log_1(&"Worker received message".into());
 
         let input_message = Reflect::get(&msg.data(), &JsValue::from_str("message"))
             .unwrap()
@@ -82,7 +80,6 @@ fn main() {
                 return;
             }
         };
-        info!("{}", command);
 
         match command {
             Command::NewImage => {
@@ -151,7 +148,6 @@ fn main() {
                         (image.to_vec(), width, WorkerMessage::DisplayOriginalImage)
                     }
                 };
-                // info!("{:?}", &image);
                 let image = Uint8ClampedArray::from(image.as_ref());
                 let mut output_message = Object::new();
 
@@ -208,7 +204,6 @@ fn main() {
                         width,
                     )
                 };
-                // info!("{:?}", &image);
                 let image = Uint8ClampedArray::from(image.as_ref());
                 let mut output_message = Object::new();
 
@@ -262,7 +257,6 @@ fn main() {
                         width,
                     )
                 };
-                // info!("{:?}", &image);
                 let image = Uint8ClampedArray::from(image.as_ref());
                 let mut output_message = Object::new();
 

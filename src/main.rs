@@ -62,18 +62,17 @@ fn main() {
 fn App() -> impl IntoView {
     let (algorithm, set_algorithm) = create_signal(Option::None);
     let (image_url, set_image_url) = create_signal("".to_string());
+    let should_algorithm_buttons_be_disabled = Signal::derive(move || image_url().is_empty());
     let file_input_ref = create_node_ref::<Input>();
     let image_ref = create_node_ref::<Img>();
     let selected_image_canvas = create_node_ref::<Canvas>();
-    let modified_image_canvas = create_node_ref::<Canvas>();
     let gamma = create_rw_signal(1.);
     let invert = create_rw_signal(false);
     let box_blur_amount = create_rw_signal(1u32);
     let sobel_edge_detector_threshold = create_rw_signal(128u8);
 
-    let on_message: Closure<dyn FnMut(MessageEvent)> =
+    let on_worker_message: Closure<dyn FnMut(MessageEvent)> =
         Closure::new(move |message_event: MessageEvent| {
-            // let data = message.data().as_string().unwrap();
             let message = &Reflect::get(&message_event.data(), &JsValue::from_str("message"))
                 .unwrap()
                 .as_string()
@@ -94,7 +93,6 @@ fn App() -> impl IntoView {
                             .unwrap()
                             .as_f64()
                             .unwrap() as u32;
-                        // let image_data = Uint8ClampedArray::new(&image_data).to_vec();
 
                         info!("{:?}", &wasm_bindgen::Clamped(image_data.to_vec()));
                         ImageData::new_with_u8_clamped_array(
@@ -159,7 +157,6 @@ fn App() -> impl IntoView {
                             .unwrap()
                             .as_f64()
                             .unwrap() as u32;
-                        // let image_data = Uint8ClampedArray::new(&image_data).to_vec();
 
                         info!("{:?}", &wasm_bindgen::Clamped(image_data.to_vec()));
                         ImageData::new_with_u8_clamped_array(
@@ -193,7 +190,6 @@ fn App() -> impl IntoView {
                             .unwrap()
                             .as_f64()
                             .unwrap() as u32;
-                        // let image_data = Uint8ClampedArray::new(&image_data).to_vec();
 
                         info!("{:?}", &wasm_bindgen::Clamped(&image_data.to_vec()));
                         ImageData::new_with_u8_clamped_array(
@@ -215,24 +211,17 @@ fn App() -> impl IntoView {
                 }
                 _ => {}
             }
-            // info!("received response {:?}", &data);
         });
 
     let mut worker_options = WorkerOptions::new();
     worker_options.type_(WorkerType::Module);
     // look into using Refcell like in the rustwasm example
     let worker = Rc::new(Worker::new_with_options("./worker_loader.js", &worker_options).unwrap());
-    worker.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
-    // let (worker, set_worker) = create_signal(worker);
-    on_message.forget();
+    worker.set_onmessage(Some(on_worker_message.as_ref().unchecked_ref()));
+    on_worker_message.forget();
     let onload_worker = worker.clone();
-    let invert_worker = worker.clone();
-    let gamma_worker = worker.clone();
-    // let (value, set_value) = create_signal(0);
 
-    // let current_algorithm = move || if value() > 5 { "Big" } else { "Small" };
-
-    let on_load = move |ev| {
+    let on_image_load = move |ev| {
         info!("{}", "image loaded");
         let image_node = image_ref.get().unwrap();
         let selected_image = selected_image_canvas.get().unwrap();
@@ -241,20 +230,6 @@ fn App() -> impl IntoView {
             selected_image.width(),
             selected_image.height()
         );
-        let modified_image = {
-            let modified_image = modified_image_canvas.get().unwrap();
-            modified_image.set_width(selected_image.width());
-            modified_image.set_height(selected_image.height());
-            modified_image.transfer_control_to_offscreen().unwrap()
-        };
-
-        // let modified_image = selected_image
-        //     .clone_node()
-        //     .unwrap()
-        //     .dyn_into::<HtmlCanvasElement>()
-        //     .unwrap()
-        //     .transfer_control_to_offscreen()
-        //     .unwrap();
 
         let canvas_context = selected_image
             .get_context("2d")
@@ -284,22 +259,17 @@ fn App() -> impl IntoView {
         let image_data = canvas_context
             .get_image_data(center_x, center_y, new_width, new_height)
             .unwrap();
+        // reset current algorithm to be None for a new image
+        set_algorithm(None);
         let raw_data = image_data.data();
         let raw_data = Uint8ClampedArray::from(raw_data.0.as_ref());
         let mut array: Array = Array::new();
         array.push(&raw_data.buffer());
-        array.push(&modified_image);
         let mut message = Object::new();
         Reflect::set(
             &message,
             &JsValue::from_str("image_data"),
             &raw_data.buffer(),
-        )
-        .unwrap();
-        Reflect::set(
-            &message,
-            &JsValue::from_str("offscreen_canvas"),
-            &modified_image,
         )
         .unwrap();
         Reflect::set(
@@ -367,22 +337,21 @@ fn App() -> impl IntoView {
                 worker.post_message(&message).unwrap();
             }
             Algorithm::Invert => {
-                if invert.get() {
-                    let mut message = Object::new();
-                    Reflect::set(
-                        &message,
-                        &JsValue::from_str("message"),
-                        &JsValue::from_str(Command::Invert.to_string().as_ref()),
-                    )
-                    .unwrap();
-                    Reflect::set(
-                        &message,
-                        &JsValue::from_str(Command::Invert.to_string().as_ref()),
-                        &JsValue::from_bool(invert.get()),
-                    )
-                    .unwrap();
-                    worker.post_message(&message).unwrap();
-                }
+                let mut message = Object::new();
+                Reflect::set(
+                    &message,
+                    &JsValue::from_str("message"),
+                    &JsValue::from_str(Command::Invert.to_string().as_ref()),
+                )
+                .unwrap();
+                Reflect::set(
+                    &message,
+                    &JsValue::from_str(Command::Invert.to_string().as_ref()),
+                    &JsValue::from_bool(invert.get()),
+                )
+                .unwrap();
+                info!("{:?}", &invert.get());
+                worker.post_message(&message).unwrap();
             }
             Algorithm::BoxBlur => {
                 info!("box bluring");
@@ -402,7 +371,9 @@ fn App() -> impl IntoView {
                 info!("sending box blur message: {}", box_blur_amount.get());
                 worker.post_message(&message).unwrap();
             }
-            Algorithm::SobelEdgeDetector => todo!(),
+            Algorithm::SobelEdgeDetector => {
+                info!("changed algorithm to sobel edge detector");
+            }
         },
         None => (),
     });
@@ -433,19 +404,12 @@ fn App() -> impl IntoView {
             _ref=image_ref
             src=""
             style="display: none"
-            on:load=on_load
+            on:load=on_image_load
         />
 
-        <AlgorithmList set_algorithm=set_algorithm/>
+        <AlgorithmList disabled=should_algorithm_buttons_be_disabled set_algorithm=set_algorithm/>
         <canvas _ref=selected_image_canvas id="selected-image"></canvas>
-        <canvas _ref=modified_image_canvas id="modified-image"></canvas>
-        // <Gamma worker={gamma_worker}/>
-        // <Invert worker={invert_worker} />
-        // <p>{current_algorithm}</p>
-        // <AlgorithmSelect algorithm=algorithm/>
         {current_algorithm}
-        // <AlgorithmSelect algorithm=algorithm gamma_worker=gamma_worker invert_worker=invert_worker/>
-
     }
 }
 
@@ -477,8 +441,8 @@ fn resize_image_for_canvas(
             (image_width, image_height)
         };
 
-    let center_x = (canvas_offset_width as f64 - new_width) / 2.0;
-    let center_y = (canvas_offset_height as f64 - new_height) / 2.0;
+    let center_x = (canvas_offset_width as f64 - new_width) / 2.;
+    let center_y = (canvas_offset_height as f64 - new_height) / 2.;
 
     ((new_width, new_height), (center_x, center_y))
 }
@@ -500,7 +464,10 @@ fn NavBar() -> impl IntoView {
 }
 
 #[component]
-fn AlgorithmList(set_algorithm: WriteSignal<Option<Algorithm>>) -> impl IntoView {
+fn AlgorithmList(
+    set_algorithm: WriteSignal<Option<Algorithm>>,
+    disabled: Signal<bool>,
+) -> impl IntoView {
     let algorithms = vec![
         Algorithm::Invert,
         Algorithm::Gamma,
@@ -509,13 +476,13 @@ fn AlgorithmList(set_algorithm: WriteSignal<Option<Algorithm>>) -> impl IntoView
     ];
 
     view! {
-        <ul>
+        <ul disabled={disabled}>
             {algorithms
                 .into_iter()
                 .map(|algorithm| {
                     view! {
                         <li>
-                            <button on:click=move |_| {
+                            <button disabled={disabled} on:click=move |_| {
                                 info!("set algorithm: {}", algorithm);
                                 set_algorithm(Some(algorithm));
                             }>{algorithm.to_string()}</button>
@@ -526,8 +493,3 @@ fn AlgorithmList(set_algorithm: WriteSignal<Option<Algorithm>>) -> impl IntoView
         </ul>
     }
 }
-
-// #[component]
-// fn AlgorithmView(algorithm: ReadSignal<Algorithm>, view: impl View) -> impl IntoView {
-//     view! { <p>{algorithm}</p> }
-// }

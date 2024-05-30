@@ -46,9 +46,7 @@ pub fn Gamma(gamma: RwSignal<f64>) -> impl IntoView {
 #[component]
 pub fn Invert(invert: RwSignal<bool>) -> impl IntoView {
     let click = move |ev: MouseEvent| {
-        info!("{}", invert.get());
         invert.set(invert.get().not());
-        info!("{}", invert.get());
     };
     view! {
         <button on:click=click
@@ -61,7 +59,7 @@ pub fn Invert(invert: RwSignal<bool>) -> impl IntoView {
 #[component]
 pub fn BoxBlur(box_blur_amount: RwSignal<u32>) -> impl IntoView {
     let box_blur = 1;
-    // box_blur_amount.set(box_blur);
+    box_blur_amount.set(box_blur);
 
     let slider = move |ev: Event| {
         let element = ev.target().unwrap().dyn_into::<HtmlInputElement>().unwrap();
