@@ -17,7 +17,7 @@ use wasm_bindgen::JsValue;
 use web_sys::wasm_bindgen::closure::Closure;
 use web_sys::{
     CanvasRenderingContext2d, HtmlCanvasElement, HtmlImageElement, ImageData, MessageEvent, Url,
-    Worker, WorkerOptions, WorkerType,
+    WorkerOptions, WorkerType,
 };
 
 #[derive(Debug, Copy, Clone)]
@@ -110,6 +110,16 @@ fn App() -> impl IntoView {
                         )
                         .unwrap()
                     };
+                    let center_x =
+                        Reflect::get(&message_event.data(), &JsValue::from_str("center_x"))
+                            .unwrap()
+                            .as_f64()
+                            .unwrap();
+                    let center_y =
+                        Reflect::get(&message_event.data(), &JsValue::from_str("center_y"))
+                            .unwrap()
+                            .as_f64()
+                            .unwrap();
                     let selected_image = selected_image_canvas.get().unwrap();
                     let canvas_context = selected_image
                         .get_context("2d")
@@ -118,7 +128,7 @@ fn App() -> impl IntoView {
                         .dyn_into::<CanvasRenderingContext2d>()
                         .unwrap();
                     canvas_context
-                        .put_image_data(&image_data, 0.0, 0.0)
+                        .put_image_data(&image_data, center_x, center_y)
                         .unwrap();
                 }
                 _ => {
@@ -130,7 +140,8 @@ fn App() -> impl IntoView {
     let mut worker_options = WorkerOptions::new();
     worker_options.type_(WorkerType::Module);
     // look into using Refcell like in the rustwasm example
-    let worker = Rc::new(Worker::new_with_options("./worker_loader.js", &worker_options).unwrap());
+    let worker =
+        Rc::new(web_sys::Worker::new_with_options("./worker_loader.js", &worker_options).unwrap());
     worker.set_onmessage(Some(on_worker_message.as_ref().unchecked_ref()));
     on_worker_message.forget();
     let onload_worker = worker.clone();
