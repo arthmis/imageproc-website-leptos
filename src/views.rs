@@ -31,7 +31,7 @@ pub fn Gamma(gamma: RwSignal<f64>) -> impl IntoView {
         </label>
         <input
             id="gamma-slider"
-            class=""
+            class="range"
             type="range"
             name="gamma"
             min="0.2"
@@ -49,7 +49,7 @@ pub fn Invert(invert: RwSignal<bool>) -> impl IntoView {
         invert.set(invert.get().not());
     };
     view! {
-        <button on:click=click
+        <button class="btn" on:click=click
         >
             "Invert"
         </button>
@@ -75,7 +75,7 @@ pub fn BoxBlur(box_blur_amount: RwSignal<u32>) -> impl IntoView {
         </label>
         <input
             id="box-blur-slider"
-            class=""
+            class="range"
             type="range"
             name="box-blur"
             min="1"

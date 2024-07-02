@@ -5,6 +5,7 @@ use leptos::leptos_dom::Text;
 use leptos::wasm_bindgen::JsCast;
 use leptos::*;
 use leptos::{component, create_signal, svg::view, view, IntoView};
+use leptos_use::use_media_query;
 use log::{error, info};
 use shared::{
     BoxBlurMessage, Command, GammaMessage, InvertMessage, NewImageMessage,
@@ -16,8 +17,8 @@ use views::{BoxBlur, Gamma, Invert, SobelEdgeDetector};
 use wasm_bindgen::JsValue;
 use web_sys::wasm_bindgen::closure::Closure;
 use web_sys::{
-    CanvasRenderingContext2d, HtmlCanvasElement, HtmlImageElement, ImageData, MessageEvent, Url,
-    WorkerOptions, WorkerType,
+    window, CanvasRenderingContext2d, HtmlCanvasElement, HtmlImageElement, ImageData,
+    MediaQueryListEvent, MessageEvent, Url, WorkerOptions, WorkerType,
 };
 
 #[derive(Debug, Copy, Clone)]
@@ -262,7 +263,23 @@ fn App() -> impl IntoView {
         None => None,
     };
 
+    let query = "(min-width: 1024px)";
+    let media_query = window().unwrap().match_media(query).unwrap().unwrap();
+    info!("{}", media_query.media());
+    info!("{}", media_query.matches());
+    let (is_screen_desktop_size, set_is_screen_desktop_size) = create_signal(false);
+    let on_screen_width_change: Closure<dyn FnMut(MediaQueryListEvent)> =
+        Closure::new(move |event: MediaQueryListEvent| {
+            set_is_screen_desktop_size(event.matches());
+        });
+    media_query.add_event_listener_with_callback(
+        "change",
+        on_screen_width_change.as_ref().unchecked_ref(),
+    );
+    on_screen_width_change.forget();
+
     view! {
+        <div class="h-screen">
         <NavBar/>
         <main class="p-2">
             <div class="flex flex-col">
@@ -271,7 +288,7 @@ fn App() -> impl IntoView {
                 </label>
                 <input
                     id="file-selection"
-                    class="file-input w-full max-w-xs"
+                    class="input-file w-full max-w-xs"
                     type="file"
                     _ref=file_input_ref
                     on:change=on_change
@@ -289,9 +306,10 @@ fn App() -> impl IntoView {
                     <canvas class="w-full h-full" _ref=selected_image_canvas id="selected-image"></canvas>
                     {current_algorithm}
                 </div>
-                <AlgorithmList disabled=should_algorithm_buttons_be_disabled set_algorithm=set_algorithm/>
+                <AlgorithmList is_screen_desktop_size=is_screen_desktop_size disabled=should_algorithm_buttons_be_disabled set_algorithm=set_algorithm/>
             </div>
         </main>
+        </div>
     }
 }
 
@@ -343,6 +361,7 @@ fn NavBar() -> impl IntoView {
 
 #[component]
 fn AlgorithmList(
+    is_screen_desktop_size: ReadSignal<bool>,
     set_algorithm: WriteSignal<Option<Algorithm>>,
     disabled: Signal<bool>,
 ) -> impl IntoView {
@@ -353,21 +372,62 @@ fn AlgorithmList(
         Algorithm::SobelEdgeDetector,
     ];
 
-    view! {
-        <ul class="flex flex-row lg:flex-col lg:h-full h-24 bg-slate-400 lg:w-24 w-full lg:menu" disabled={disabled}>
-            {algorithms
+    let desktop_sidebar = view! {
+        <div class="sidebar h-full justify-start">
+            <section class="sidebar-content h-fit min-h-[20rem] overflow-visible">
+            <nav class="menu rounded-md">
+            <section class="menu-section px-4">
+                <span class="menu-title">"Algorithms"</span>
+                <ul class="menu-items">
+                    {algorithms.clone()
+                        .into_iter()
+                        .map(|algorithm| {
+                            view! {
+                                <li class="menu-item" >
+                                    <span class="" disabled={disabled} on:click=move |_| {
+                                        info!("set algorithm: {}", algorithm);
+                                        set_algorithm(Some(algorithm));
+                                    }>{algorithm.to_string()}</span>
+                                </li>
+                            }
+                        })
+                        .collect::<Vec<_>>()}
+                </ul>
+            </section>
+            </nav>
+            </section>
+        </div>
+    };
+
+    let mobile_bottombar = view! {
+        <div>
+        <ul class="flex flex-row h-24 bg-gray-200 w-full" disabled={disabled}>
+            {algorithms.clone()
                 .into_iter()
                 .map(|algorithm| {
                     view! {
-                        <li class="flex-1 w-0 border text-xl p-2 lg:w-full" class=("disabled", disabled) >
-                            <button class="w-full h-full" disabled={disabled} on:click=move |_| {
+                        <li class="w-48 border p-3" class=("disabled", disabled) >
+                            <span class="w-full h-full" disabled={disabled} on:click=move |_| {
                                 info!("set algorithm: {}", algorithm);
                                 set_algorithm(Some(algorithm));
-                            }>{algorithm.to_string()}</button>
+                            }>{algorithm.to_string()}</span>
                         </li>
                     }
                 })
                 .collect::<Vec<_>>()}
         </ul>
+        </div>
+    };
+
+    view! {
+        {
+            move || {
+                if is_screen_desktop_size.get() {
+                    desktop_sidebar.clone()
+                } else {
+                    mobile_bottombar.clone()
+                }
+            }
+        }
     }
 }
