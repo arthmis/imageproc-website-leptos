@@ -31,7 +31,7 @@ pub fn Gamma(gamma: RwSignal<f64>) -> impl IntoView {
         </label>
         <input
             id="gamma-slider"
-            class="range"
+            class="range sm:w-4/5 lg:w-64"
             type="range"
             name="gamma"
             min="0.2"
@@ -49,7 +49,7 @@ pub fn Invert(invert: RwSignal<bool>) -> impl IntoView {
         invert.set(invert.get().not());
     };
     view! {
-        <button class="btn" on:click=click
+        <button class="btn lg:w-32 sm:w-9/12" on:click=click
         >
             "Invert"
         </button>
