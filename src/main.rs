@@ -21,7 +21,7 @@ use web_sys::{
     MediaQueryListEvent, MessageEvent, Url, WorkerOptions, WorkerType,
 };
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 enum Algorithm {
     Gamma,
     Invert,
@@ -309,11 +309,11 @@ fn App() -> impl IntoView {
             />
 
             <div class="flex flex-col lg:flex-row-reverse">
-                <div class="flex flex-col w-full min-h-[70dvh] justify-center content-center">
+                <div class="flex flex-col w-full min-h-[70dvh] justify-center items-center">
                     <canvas class="w-full h-full" _ref=selected_image_canvas id="selected-image"></canvas>
                     {current_algorithm}
                 </div>
-                <AlgorithmList is_screen_desktop_size=is_screen_desktop_size disabled=should_algorithm_buttons_be_disabled set_algorithm=set_algorithm/>
+                <AlgorithmList is_screen_desktop_size=is_screen_desktop_size disabled=should_algorithm_buttons_be_disabled set_algorithm=set_algorithm current_algorithm=algorithm/>
             </div>
         </main>
         </div>
@@ -371,6 +371,7 @@ fn AlgorithmList(
     is_screen_desktop_size: ReadSignal<bool>,
     set_algorithm: WriteSignal<Option<Algorithm>>,
     disabled: Signal<bool>,
+    current_algorithm: ReadSignal<Option<Algorithm>>,
 ) -> impl IntoView {
     let algorithms = vec![
         Algorithm::Invert,
@@ -412,9 +413,15 @@ fn AlgorithmList(
             {algorithms.clone()
                 .into_iter()
                 .map(|algorithm| {
+                    let is_selected = move || match current_algorithm() {
+                        Some(current_algorithm) => {
+                            current_algorithm == algorithm
+                        },
+                        None => false
+                    };
                     view! {
-                        <li class="w-48 border p-3" class=("disabled", disabled) >
-                            <span class="w-full h-full" disabled={disabled} on:click=move |_| {
+                        <li class="w-48 border p-3 hover:bg-gray-300" class=("bg-gray-500", is_selected)>
+                            <span class="flex items-center justify-center w-full h-full" disabled={disabled} on:click=move |_| {
                                 info!("set algorithm: {}", algorithm);
                                 set_algorithm(Some(algorithm));
                             }>{algorithm.to_string()}</span>
