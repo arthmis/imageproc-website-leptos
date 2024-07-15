@@ -262,10 +262,10 @@ fn App() -> impl IntoView {
 
     let current_algorithm = move || match algorithm() {
         Some(current_algorithm) => match current_algorithm {
-            Algorithm::Gamma => Some(view! {<Gamma gamma=gamma/>}),
-            Algorithm::Invert => Some(view! {<Invert invert=invert/>}),
-            Algorithm::BoxBlur => Some(view! {<BoxBlur box_blur_amount=box_blur_amount/>}),
-            Algorithm::SobelEdgeDetector => Some(view! {<SobelEdgeDetector />}),
+            Algorithm::Gamma => Some(view! { <Gamma gamma=gamma/> }),
+            Algorithm::Invert => Some(view! { <Invert invert=invert/> }),
+            Algorithm::BoxBlur => Some(view! { <BoxBlur box_blur_amount=box_blur_amount/> }),
+            Algorithm::SobelEdgeDetector => Some(view! { <SobelEdgeDetector/> }),
         },
         None => None,
     };
@@ -292,39 +292,47 @@ fn App() -> impl IntoView {
 
     view! {
         <div class="h-screen">
-        <NavBar/>
-        <main class="p-2">
-            <div class="flex flex-col">
-                <input
-                    type="file"
-                    id="file-input"
-                    accept="image/png, image/jpeg"
-                    style="display: none;"
-                    _ref=file_input_ref
-                    on:change=on_change
-                />
-                // needs to be undelegated because of behavior from wasm bindgen explained here
-                // https://github.com/leptos-rs/leptos/issues/2104
-                <button id="select-image" class="btn btn-primary" on:click:undelegated=select_image_onclick>
-                    // <i class="fa fa-upload" aria-hidden="true" style="font-size:1em;"></i>
-                    "Select Image"
-                </button>
-            </div>
-            <img
-                _ref=image_ref
-                src=""
-                style="display: none"
-                on:load=on_image_load
-            />
-
-            <div class="flex flex-col lg:flex-row-reverse">
-                <div class="flex flex-col w-full min-h-[70dvh] justify-center items-center">
-                    <canvas class="w-full h-full" _ref=selected_image_canvas id="selected-image"></canvas>
-                    {current_algorithm}
+            <NavBar/>
+            <main class="p-2">
+                <div class="flex flex-col">
+                    <input
+                        type="file"
+                        id="file-input"
+                        accept="image/png, image/jpeg"
+                        style="display: none;"
+                        _ref=file_input_ref
+                        on:change=on_change
+                    />
+                    // needs to be undelegated because of behavior from wasm bindgen explained here
+                    // https://github.com/leptos-rs/leptos/issues/2104
+                    <button
+                        id="select-image"
+                        class="btn btn-primary"
+                        on:click:undelegated=select_image_onclick
+                    >
+                        // <i class="fa fa-upload" aria-hidden="true" style="font-size:1em;"></i>
+                        "Select Image"
+                    </button>
                 </div>
-                <AlgorithmList is_screen_desktop_size=is_screen_desktop_size disabled=should_algorithm_buttons_be_disabled set_algorithm=set_algorithm current_algorithm=algorithm/>
-            </div>
-        </main>
+                <img _ref=image_ref src="" style="display: none" on:load=on_image_load/>
+
+                <div class="flex flex-col lg:flex-row-reverse">
+                    <div class="flex flex-col w-full min-h-[70dvh] justify-center items-center">
+                        <canvas
+                            class="w-full h-full"
+                            _ref=selected_image_canvas
+                            id="selected-image"
+                        ></canvas>
+                        {current_algorithm}
+                    </div>
+                    <AlgorithmList
+                        is_screen_desktop_size=is_screen_desktop_size
+                        disabled=should_algorithm_buttons_be_disabled
+                        set_algorithm=set_algorithm
+                        current_algorithm=algorithm
+                    />
+                </div>
+            </main>
         </div>
     }
 }
@@ -392,65 +400,78 @@ fn AlgorithmList(
     let desktop_sidebar = view! {
         <div class="sidebar h-full justify-start">
             <section class="sidebar-content h-fit min-h-[20rem] overflow-visible">
-            <nav class="menu rounded-md">
-            <section class="menu-section px-4">
-                <span class="menu-title">"Algorithms"</span>
-                <ul class="menu-items">
-                    {algorithms.clone()
-                        .into_iter()
-                        .map(|algorithm| {
-                            view! {
-                                <li class="menu-item" >
-                                    <span class="" disabled={disabled} on:click=move |_| {
-                                        info!("set algorithm: {}", algorithm);
-                                        set_algorithm(Some(algorithm));
-                                    }>{algorithm.to_string()}</span>
-                                </li>
-                            }
-                        })
-                        .collect::<Vec<_>>()}
-                </ul>
-            </section>
-            </nav>
+                <nav class="menu rounded-md">
+                    <section class="menu-section px-4">
+                        <span class="menu-title">"Algorithms"</span>
+                        <ul class="menu-items">
+                            {algorithms
+                                .clone()
+                                .into_iter()
+                                .map(|algorithm| {
+                                    view! {
+                                        <li class="menu-item">
+                                            <span
+                                                class=""
+                                                disabled=disabled
+                                                on:click=move |_| {
+                                                    info!("set algorithm: {}", algorithm);
+                                                    set_algorithm(Some(algorithm));
+                                                }
+                                            >
+                                                {algorithm.to_string()}
+                                            </span>
+                                        </li>
+                                    }
+                                })
+                                .collect::<Vec<_>>()}
+                        </ul>
+                    </section>
+                </nav>
             </section>
         </div>
     };
 
     let mobile_bottombar = view! {
         <div>
-        <ul class="flex flex-row h-24 bg-gray-200 w-full" disabled={disabled}>
-            {algorithms.clone()
-                .into_iter()
-                .map(|algorithm| {
-                    let is_selected = move || match current_algorithm() {
-                        Some(current_algorithm) => {
-                            current_algorithm == algorithm
-                        },
-                        None => false
-                    };
-                    view! {
-                        <li class="w-48 border p-3 hover:bg-gray-300" class=("bg-gray-500", is_selected)>
-                            <span class="flex items-center justify-center w-full h-full" disabled={disabled} on:click=move |_| {
-                                info!("set algorithm: {}", algorithm);
-                                set_algorithm(Some(algorithm));
-                            }>{algorithm.to_string()}</span>
-                        </li>
-                    }
-                })
-                .collect::<Vec<_>>()}
-        </ul>
+            <ul class="flex flex-row h-24 bg-gray-200 w-full" disabled=disabled>
+                {algorithms
+                    .clone()
+                    .into_iter()
+                    .map(|algorithm| {
+                        let is_selected = move || match current_algorithm() {
+                            Some(current_algorithm) => current_algorithm == algorithm,
+                            None => false,
+                        };
+                        view! {
+                            <li
+                                class="w-48 border p-3 hover:bg-gray-300"
+                                class=("bg-gray-500", is_selected)
+                            >
+                                <span
+                                    class="flex items-center justify-center w-full h-full"
+                                    disabled=disabled
+                                    on:click=move |_| {
+                                        info!("set algorithm: {}", algorithm);
+                                        set_algorithm(Some(algorithm));
+                                    }
+                                >
+                                    {algorithm.to_string()}
+                                </span>
+                            </li>
+                        }
+                    })
+                    .collect::<Vec<_>>()}
+            </ul>
         </div>
     };
 
     view! {
-        {
-            move || {
-                if is_screen_desktop_size.get() {
-                    desktop_sidebar.clone()
-                } else {
-                    mobile_bottombar.clone()
-                }
+        {move || {
+            if is_screen_desktop_size.get() {
+                desktop_sidebar.clone()
+            } else {
+                mobile_bottombar.clone()
             }
-        }
+        }}
     }
 }
