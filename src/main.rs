@@ -285,21 +285,30 @@ fn App() -> impl IntoView {
     );
     on_screen_width_change.forget();
 
+    let select_image_onclick = move |event| {
+        let node = file_input_ref.get().unwrap();
+        node.click();
+    };
+
     view! {
         <div class="h-screen">
         <NavBar/>
         <main class="p-2">
             <div class="flex flex-col">
-                <label for="file-selection" class="some-custom-css">
-                    "Select Image"
-                </label>
                 <input
-                    id="file-selection"
-                    class="input-file w-full max-w-xs"
                     type="file"
+                    id="file-input"
+                    accept="image/png, image/jpeg"
+                    style="display: none;"
                     _ref=file_input_ref
                     on:change=on_change
                 />
+                // needs to be undelegated because of behavior from wasm bindgen explained here
+                // https://github.com/leptos-rs/leptos/issues/2104
+                <button id="select-image" class="btn btn-primary" on:click:undelegated=select_image_onclick>
+                    // <i class="fa fa-upload" aria-hidden="true" style="font-size:1em;"></i>
+                    "Select Image"
+                </button>
             </div>
             <img
                 _ref=image_ref
