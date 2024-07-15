@@ -47,3 +47,9 @@ features = [
     "MediaQueryListEvent",
     "EventTarget",
 ]
+
+[profile.dev]
+overflow-checks = false
+
+[profile.release]
+overflow-checks = false

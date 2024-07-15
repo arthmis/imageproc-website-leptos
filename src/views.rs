@@ -27,7 +27,8 @@ pub fn Gamma(gamma: RwSignal<f64>) -> impl IntoView {
 
     view! {
         <label for="gamma-slider" class="some-custom-css">
-            "gamma "{gamma}
+            "gamma "
+            {gamma}
         </label>
         <input
             id="gamma-slider"
@@ -37,7 +38,7 @@ pub fn Gamma(gamma: RwSignal<f64>) -> impl IntoView {
             min="0.2"
             max="5"
             step="0.1"
-            value={default_gamma.to_string()}
+            value=default_gamma.to_string()
             on:change=slider
         />
     }
@@ -49,8 +50,7 @@ pub fn Invert(invert: RwSignal<bool>) -> impl IntoView {
         invert.set(invert.get().not());
     };
     view! {
-        <button class="btn lg:w-32 sm:w-9/12" on:click=click
-        >
+        <button class="btn lg:w-32 sm:w-9/12" on:click=click>
             "Invert"
         </button>
     }
@@ -71,7 +71,8 @@ pub fn BoxBlur(box_blur_amount: RwSignal<u32>) -> impl IntoView {
 
     view! {
         <label for="box-blur-slider" class="some-custom-css">
-            "box blur "{box_blur_amount}
+            "box blur "
+            {box_blur_amount}
         </label>
         <input
             id="box-blur-slider"
@@ -81,15 +82,40 @@ pub fn BoxBlur(box_blur_amount: RwSignal<u32>) -> impl IntoView {
             min="1"
             max="99"
             step="2"
-            value={box_blur.to_string()}
+            value=box_blur.to_string()
             on:change=slider
         />
     }
 }
 
 #[component]
-pub fn SobelEdgeDetector() -> impl IntoView {
+pub fn SobelEdgeDetector(threshold: RwSignal<u32>) -> impl IntoView {
+    let default_threshold = 128;
+    threshold.set(default_threshold);
+
+    let slider = move |ev: Event| {
+        let element = ev.target().unwrap().dyn_into::<HtmlInputElement>().unwrap();
+        let value = element.value();
+        let value = value.parse::<f64>().unwrap() as u32;
+        threshold.set(value);
+        info!("sliding for sobel edge detector: {}", threshold.get());
+    };
+
     view! {
-        <p>"Sobel Edge Detector"</p>
+        <label for="sobel-edge-detector-slider" class="some-custom-css">
+            "sobel edge detector "
+            {threshold}
+        </label>
+        <input
+            id="box-blur-slider"
+            class="range"
+            type="range"
+            name="box-blur"
+            min="1"
+            max="255"
+            step="1"
+            value=default_threshold.to_string()
+            on:change=slider
+        />
     }
 }

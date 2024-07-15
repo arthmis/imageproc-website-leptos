@@ -181,7 +181,7 @@ impl ToJsObject for SobelEdgeDetectionMessage {
         .unwrap();
         Reflect::set(
             &message,
-            &JsValue::from_str(Command::BoxBlur.to_string().as_ref()),
+            &JsValue::from_str(Command::SobelEdgeDetector.to_string().as_ref()),
             &JsValue::from_f64(self.threshold as f64),
         )
         .unwrap();

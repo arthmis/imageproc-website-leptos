@@ -73,7 +73,7 @@ fn App() -> impl IntoView {
     let gamma = create_rw_signal(1.);
     let invert = create_rw_signal(false);
     let box_blur_amount = create_rw_signal(1u32);
-    let sobel_edge_detector_threshold = create_rw_signal(128u8);
+    let sobel_edge_detector_threshold = create_rw_signal(128u32);
 
     let on_worker_message: Closure<dyn FnMut(MessageEvent)> =
         Closure::new(move |message_event: MessageEvent| {
@@ -251,10 +251,12 @@ fn App() -> impl IntoView {
             }
             Algorithm::SobelEdgeDetector => {
                 info!("changed algorithm to sobel edge detector");
-                // let message =
-                //     SobelEdgeDetectionMessage::new(Command::SobelEdgeDetector.to_string(), sobel_edge_detector_threshold.get())
-                //         .to_js_object();
-                // worker.post_message(&message).unwrap();
+                let message = SobelEdgeDetectionMessage::new(
+                    Command::SobelEdgeDetector.to_string(),
+                    sobel_edge_detector_threshold.get(),
+                )
+                .to_js_object();
+                worker.post_message(&message).unwrap();
             }
         },
         None => (),
@@ -265,7 +267,9 @@ fn App() -> impl IntoView {
             Algorithm::Gamma => Some(view! { <Gamma gamma=gamma/> }),
             Algorithm::Invert => Some(view! { <Invert invert=invert/> }),
             Algorithm::BoxBlur => Some(view! { <BoxBlur box_blur_amount=box_blur_amount/> }),
-            Algorithm::SobelEdgeDetector => Some(view! { <SobelEdgeDetector/> }),
+            Algorithm::SobelEdgeDetector => {
+                Some(view! { <SobelEdgeDetector threshold=sobel_edge_detector_threshold/> })
+            }
         },
         None => None,
     };
@@ -418,6 +422,7 @@ fn AlgorithmList(
                                                     set_algorithm(Some(algorithm));
                                                 }
                                             >
+
                                                 {algorithm.to_string()}
                                             </span>
                                         </li>
@@ -455,6 +460,7 @@ fn AlgorithmList(
                                         set_algorithm(Some(algorithm));
                                     }
                                 >
+
                                     {algorithm.to_string()}
                                 </span>
                             </li>

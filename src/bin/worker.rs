@@ -354,7 +354,81 @@ fn main() {
                     .post_message_with_transfer(&output_message, &array)
                     .unwrap();
             }
-            Command::SobelEdgeDetector => todo!(), // let canvas_context = canvas
+            Command::SobelEdgeDetector => {
+                info!("{}", Command::SobelEdgeDetector.to_string());
+                info!("{:?}", &msg.data());
+                let threshold = Reflect::get(
+                    &msg.data(),
+                    &JsValue::from_str(&Command::SobelEdgeDetector.to_string()),
+                )
+                .unwrap()
+                .dyn_into::<Number>()
+                .unwrap()
+                .as_f64()
+                .unwrap();
+                let threshold = threshold as u32;
+                info!("sobel edge detector threshold value: {}", threshold);
+                let (image, width, center_x, center_y) = {
+                    let image = (*UNMODIFIED_IMAGE.lock().unwrap()).clone();
+                    if image.buffer().is_empty() {
+                        info!("no image selected to perform image processing");
+                        return;
+                    }
+                    info!("{:?}", &image);
+                    let width = image.width();
+                    let (center_x, center_y) = image.origin();
+                    (
+                        algorithms::sobel_edge_detection(image.to_vec(), width, threshold as u8),
+                        width,
+                        center_x,
+                        center_y,
+                    )
+                };
+                let image = Uint8ClampedArray::from(image.as_ref());
+                let mut output_message = Object::new();
+
+                Reflect::set(
+                    &output_message,
+                    &JsValue::from_str("message"),
+                    &JsValue::from_str(
+                        WorkerResponseMessage::SobelEdgeDetector
+                            .to_string()
+                            .as_ref(),
+                    ),
+                )
+                .unwrap();
+                Reflect::set(
+                    &output_message,
+                    &JsValue::from_str("image_data"),
+                    &image.buffer(),
+                )
+                .unwrap();
+                Reflect::set(
+                    &output_message,
+                    &JsValue::from_str("width"),
+                    &JsValue::from_f64(width as f64),
+                )
+                .unwrap();
+                Reflect::set(
+                    &output_message,
+                    &JsValue::from_str("center_x"),
+                    &JsValue::from_f64(center_x),
+                )
+                .unwrap();
+                Reflect::set(
+                    &output_message,
+                    &JsValue::from_str("center_y"),
+                    &JsValue::from_f64(center_y),
+                )
+                .unwrap();
+                info!("{:?}", &output_message);
+                let array: Array = Array::new();
+                array.push(&image.buffer());
+
+                scope_clone
+                    .post_message_with_transfer(&output_message, &array)
+                    .unwrap();
+            }
         }
     }) as Box<dyn Fn(MessageEvent)>);
 
