@@ -164,8 +164,15 @@ fn App() -> impl IntoView {
         let (scaled_width, scaled_height) =
             get_scaled_image_dimensions_to_canvas(&image_node, &selected_image_canvas);
 
-        selected_image_canvas.set_width(selected_image_canvas.client_width() as u32);
-        selected_image_canvas.set_height(selected_image_canvas.client_height() as u32);
+        let new_canvas_width = selected_image_canvas.offset_width();
+        let new_canvas_height = selected_image_canvas.offset_height();
+
+        selected_image_canvas.set_width(new_canvas_width as u32);
+        // TODO: setting the height directly with using .offset_height() or any other height
+        // functions
+        // doesn't work correctly. However if I place the value into a variable first then it works
+        // no idea how this is happening
+        selected_image_canvas.set_height(new_canvas_height as u32);
 
         let center_x = (selected_image_canvas.width() as f64 - scaled_width) / 2.;
         let center_y = (selected_image_canvas.height() as f64 - scaled_height) / 2.;
@@ -317,13 +324,13 @@ fn get_scaled_image_dimensions_to_canvas(
     image_node: &HtmlImageElement,
     canvas: &HtmlCanvasElement,
 ) -> (f64, f64) {
-    let canvas_client_width = canvas.client_width() as f64;
-    let canvas_client_height = canvas.client_height() as f64;
+    let canvas_offset_width = canvas.offset_width() as f64;
+    let canvas_offset_height = canvas.offset_height() as f64;
     let image_width = image_node.width() as f64;
     let image_height = image_node.height() as f64;
 
-    let width_scale = canvas_client_width as f64 / image_width as f64;
-    let height_scale = canvas_client_height as f64 / image_height as f64;
+    let width_scale = canvas_offset_width as f64 / image_width as f64;
+    let height_scale = canvas_offset_height as f64 / image_height as f64;
     let scale = if width_scale < height_scale {
         width_scale
     } else {
@@ -331,7 +338,7 @@ fn get_scaled_image_dimensions_to_canvas(
     };
 
     let (new_width, new_height) =
-        if canvas_client_width < image_width || canvas_client_height < image_height {
+        if canvas_offset_width < image_width || canvas_offset_height < image_height {
             (
                 (image_width * scale).round(),
                 (image_height * scale).round(),
