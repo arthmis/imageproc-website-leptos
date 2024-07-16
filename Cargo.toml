@@ -28,6 +28,7 @@ version = "0.3"
 features = [
     "Node",
     "HtmlInputElement",
+    "HtmlElement",
     "Element",
     "File",
     "FileList",

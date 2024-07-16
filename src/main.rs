@@ -1,4 +1,6 @@
 mod views;
+use ev::MouseEvent;
+use html::Div;
 use js_sys::{Array, ArrayBuffer, JsString, Object, Reflect, Uint8ClampedArray};
 use leptos::html::{Canvas, Img, Input, ToHtmlElement};
 use leptos::leptos_dom::Text;
@@ -69,6 +71,7 @@ fn App() -> impl IntoView {
     let should_algorithm_buttons_be_disabled = Signal::derive(move || image_url().is_empty());
     let file_input_ref = create_node_ref::<Input>();
     let image_ref = create_node_ref::<Img>();
+    let canvas_wrapper = create_node_ref::<Div>();
     let selected_image_canvas = create_node_ref::<Canvas>();
     let gamma = create_rw_signal(1.);
     let invert = create_rw_signal(false);
@@ -91,7 +94,6 @@ fn App() -> impl IntoView {
                 | WorkerResponseMessage::Gamma
                 | WorkerResponseMessage::DisplayOriginalImage
                 | WorkerResponseMessage::SobelEdgeDetector => {
-                    info!("worker message: {}", worker_message.to_string());
                     let image_data = {
                         let image_data = Uint8ClampedArray::new(
                             &Reflect::get(&message_event.data(), &JsValue::from_str("image_data"))
@@ -104,7 +106,6 @@ fn App() -> impl IntoView {
                             .as_f64()
                             .unwrap() as u32;
 
-                        info!("{:?}", &wasm_bindgen::Clamped(image_data.to_vec()));
                         ImageData::new_with_u8_clamped_array(
                             wasm_bindgen::Clamped(&image_data.to_vec()),
                             width,
@@ -159,13 +160,38 @@ fn App() -> impl IntoView {
     let on_image_load = move |ev| {
         info!("{}", "image loaded");
         let image_node = image_ref.get().unwrap();
+        let canvas_wrapper_node = canvas_wrapper.get().unwrap();
         let selected_image_canvas = selected_image_canvas.get().unwrap();
+
+        // let canvas_wrapper_width = canvas_wrapper_node.client_width();
+        // let canvas_wrapper_height = canvas_wrapper_node.client_height();
+        let selected_image_canvas = selected_image_canvas.style("width", "100%");
+        let selected_image_canvas = selected_image_canvas.style("height", "100%");
+        // let new_canvas_width = selected_image_canvas.client_width();
+        // let new_canvas_height = selected_image_canvas.client_height();
+        let new_canvas_width = selected_image_canvas.offset_width();
+        let new_canvas_height = selected_image_canvas.offset_height();
+        info!(
+            "selected_image_canvas client width: {}",
+            selected_image_canvas.client_width()
+        );
+        info!(
+            "selected_image_canvas client height: {}",
+            selected_image_canvas.client_height()
+        );
+
+        selected_image_canvas.set_width(new_canvas_width as u32);
+        // TODO: setting the height directly with using .offset_height() or any other height
+        // functions
+        // doesn't work correctly. However if I place the value into a variable first then it works
+        // no idea how this is happening
+        selected_image_canvas.set_height(new_canvas_width as u32);
 
         let (scaled_width, scaled_height) =
             get_scaled_image_dimensions_to_canvas(&image_node, &selected_image_canvas);
 
-        let new_canvas_width = selected_image_canvas.offset_width();
-        let new_canvas_height = selected_image_canvas.offset_height();
+        let new_canvas_width = selected_image_canvas.client_width();
+        let new_canvas_height = selected_image_canvas.client_height();
 
         selected_image_canvas.set_width(new_canvas_width as u32);
         // TODO: setting the height directly with using .offset_height() or any other height
@@ -176,7 +202,6 @@ fn App() -> impl IntoView {
 
         let center_x = (selected_image_canvas.width() as f64 - scaled_width) / 2.;
         let center_y = (selected_image_canvas.height() as f64 - scaled_height) / 2.;
-        info!("center x: {} center y: {}", center_x, center_y);
         let canvas_context = selected_image_canvas
             .get_context("2d")
             .unwrap()
@@ -250,7 +275,6 @@ fn App() -> impl IntoView {
                 worker.post_message(&message).unwrap();
             }
             Algorithm::SobelEdgeDetector => {
-                info!("changed algorithm to sobel edge detector");
                 let message = SobelEdgeDetectionMessage::new(
                     Command::SobelEdgeDetector.to_string(),
                     sobel_edge_detector_threshold.get(),
@@ -274,11 +298,14 @@ fn App() -> impl IntoView {
         None => None,
     };
 
+    let select_image_onclick = move |event| {
+        let node = file_input_ref.get().unwrap();
+        node.click();
+    };
+
     let query = "(min-width: 1024px)";
     let media_query = window().unwrap().match_media(query).unwrap().unwrap();
-    info!("{}", media_query.media());
-    info!("{}", media_query.matches());
-    let (is_screen_desktop_size, set_is_screen_desktop_size) = create_signal(false);
+    let (is_screen_desktop_size, set_is_screen_desktop_size) = create_signal(media_query.matches());
     let on_screen_width_change: Closure<dyn FnMut(MediaQueryListEvent)> =
         Closure::new(move |event: MediaQueryListEvent| {
             set_is_screen_desktop_size(event.matches());
@@ -289,16 +316,35 @@ fn App() -> impl IntoView {
     );
     on_screen_width_change.forget();
 
-    let select_image_onclick = move |event| {
-        let node = file_input_ref.get().unwrap();
-        node.click();
+    let mobile_select_image_button = move || {
+        if !is_screen_desktop_size() {
+            // needs to be undelegated because of behavior from wasm bindgen explained here
+            // https://github.com/leptos-rs/leptos/issues/2104
+            Some(view! {
+                <button
+                    id="select-image"
+                    class="btn btn-rounded btn-primary"
+                    on:click:undelegated=select_image_onclick
+                >
+                    // <i class="fa fa-upload" aria-hidden="true" style="font-size:1em;"></i>
+                    "Select Image"
+                </button>
+            })
+        } else {
+            None
+        }
     };
 
     view! {
-        <div class="h-screen">
+        <div class="flex flex-col h-screen">
             <NavBar/>
-            <main class="p-2">
-                <div class="flex flex-col">
+            <main class="flex flex-col h-full">
+                // <div class="flex p-3">
+                <div
+                    class="flex p-3 justify-center items-center"
+                    class=("hidden", is_screen_desktop_size)
+                >
+                    // class=("flex", is_screen_desktop_size)
                     <input
                         type="file"
                         id="file-input"
@@ -307,33 +353,28 @@ fn App() -> impl IntoView {
                         _ref=file_input_ref
                         on:change=on_change
                     />
-                    // needs to be undelegated because of behavior from wasm bindgen explained here
-                    // https://github.com/leptos-rs/leptos/issues/2104
-                    <button
-                        id="select-image"
-                        class="btn btn-primary"
-                        on:click:undelegated=select_image_onclick
-                    >
-                        // <i class="fa fa-upload" aria-hidden="true" style="font-size:1em;"></i>
-                        "Select Image"
-                    </button>
+                    {mobile_select_image_button}
                 </div>
                 <img _ref=image_ref src="" style="display: none" on:load=on_image_load/>
 
-                <div class="flex flex-col lg:flex-row-reverse">
-                    <div class="flex flex-col w-full min-h-[70dvh] justify-center items-center">
-                        <canvas
-                            class="w-full h-full"
-                            _ref=selected_image_canvas
-                            id="selected-image"
-                        ></canvas>
-                        {current_algorithm}
+                <div class="flex flex-col lg:flex-row lg:flex-row-reverse h-full justify-between">
+                    <div class="flex flex-col w-full justify-center items-center">
+                        // <div class="flex flex-col grow w-full min-h-[70dvh] max-h-[70dvh] justify-center items-center">
+                        <div
+                            id="canvas-wrapper"
+                            class="flex justify-center items-center w-full h-full grow p-4"
+                            _ref=canvas_wrapper
+                        >
+                            <canvas _ref=selected_image_canvas id="selected-image"></canvas>
+                        </div>
+                        <div>{current_algorithm}</div>
                     </div>
                     <AlgorithmList
                         is_screen_desktop_size=is_screen_desktop_size
                         disabled=should_algorithm_buttons_be_disabled
                         set_algorithm=set_algorithm
                         current_algorithm=algorithm
+                        select_image_onclick=select_image_onclick
                     />
                 </div>
             </main>
@@ -345,13 +386,13 @@ fn get_scaled_image_dimensions_to_canvas(
     image_node: &HtmlImageElement,
     canvas: &HtmlCanvasElement,
 ) -> (f64, f64) {
-    let canvas_offset_width = canvas.offset_width() as f64;
-    let canvas_offset_height = canvas.offset_height() as f64;
+    let canvas_client_width = canvas.client_width() as f64;
+    let canvas_client_height = canvas.client_height() as f64;
     let image_width = image_node.width() as f64;
     let image_height = image_node.height() as f64;
 
-    let width_scale = canvas_offset_width as f64 / image_width as f64;
-    let height_scale = canvas_offset_height as f64 / image_height as f64;
+    let width_scale = canvas_client_width as f64 / image_width as f64;
+    let height_scale = canvas_client_height as f64 / image_height as f64;
     let scale = if width_scale < height_scale {
         width_scale
     } else {
@@ -359,7 +400,7 @@ fn get_scaled_image_dimensions_to_canvas(
     };
 
     let (new_width, new_height) =
-        if canvas_offset_width < image_width || canvas_offset_height < image_height {
+        if canvas_client_width < image_width || canvas_client_height < image_height {
             (
                 (image_width * scale).round(),
                 (image_height * scale).round(),
@@ -375,11 +416,7 @@ fn get_scaled_image_dimensions_to_canvas(
 fn NavBar() -> impl IntoView {
     view! {
         <nav class="navbar">
-            <a href="index.html">
-                <i class="fa fa-home" aria-hidden="true" style="font-size:2em;"></i>
-            </a>
-
-            <a href="https://github.com/arthmis/imageproc-website">
+            <a class="navbar-item navbar-end" href="https://github.com/arthmis/imageproc-website">
                 <i class="fa fa-github" aria-hidden="true" style="font-size:1.4em;"></i>
                 "Github"
             </a>
@@ -388,12 +425,16 @@ fn NavBar() -> impl IntoView {
 }
 
 #[component]
-fn AlgorithmList(
+fn AlgorithmList<F>(
     is_screen_desktop_size: ReadSignal<bool>,
     set_algorithm: WriteSignal<Option<Algorithm>>,
     disabled: Signal<bool>,
     current_algorithm: ReadSignal<Option<Algorithm>>,
-) -> impl IntoView {
+    select_image_onclick: F,
+) -> impl IntoView
+where
+    F: Fn(MouseEvent) + 'static,
+{
     let algorithms = vec![
         Algorithm::Invert,
         Algorithm::Gamma,
@@ -402,8 +443,20 @@ fn AlgorithmList(
     ];
 
     let desktop_sidebar = view! {
-        <div class="sidebar h-full justify-start">
-            <section class="sidebar-content h-fit min-h-[20rem] overflow-visible">
+        <div class="sidebar w-full h-full justify-start grow mr-2">
+            <section class="sidebar-content h-fit overflow-visible">
+                <section class="sidebar-header items-center p-4">
+                    // needs to be undelegated because of behavior from wasm bindgen explained here
+                    // https://github.com/leptos-rs/leptos/issues/2104
+                    <button
+                        id="select-image"
+                        class="btn btn-rounded btn-primary"
+                        on:click:undelegated=select_image_onclick
+                    >
+                        "Select Image"
+                    </button>
+                </section>
+                <div class="divider my-0"></div>
                 <nav class="menu rounded-md">
                     <section class="menu-section px-4">
                         <span class="menu-title">"Algorithms"</span>
@@ -413,18 +466,14 @@ fn AlgorithmList(
                                 .into_iter()
                                 .map(|algorithm| {
                                     view! {
-                                        <li class="menu-item">
-                                            <span
-                                                class=""
-                                                disabled=disabled
-                                                on:click=move |_| {
-                                                    info!("set algorithm: {}", algorithm);
-                                                    set_algorithm(Some(algorithm));
-                                                }
-                                            >
+                                        <li
+                                            class="menu-item"
+                                            on:click=move |_| {
+                                                set_algorithm(Some(algorithm));
+                                            }
+                                        >
 
-                                                {algorithm.to_string()}
-                                            </span>
+                                            <span disabled=disabled>{algorithm.to_string()}</span>
                                         </li>
                                     }
                                 })
@@ -437,7 +486,7 @@ fn AlgorithmList(
     };
 
     let mobile_bottombar = view! {
-        <div>
+        <div class="">
             <ul class="flex flex-row h-24 bg-gray-200 w-full" disabled=disabled>
                 {algorithms
                     .clone()
@@ -456,7 +505,6 @@ fn AlgorithmList(
                                     class="flex items-center justify-center w-full h-full"
                                     disabled=disabled
                                     on:click=move |_| {
-                                        info!("set algorithm: {}", algorithm);
                                         set_algorithm(Some(algorithm));
                                     }
                                 >
