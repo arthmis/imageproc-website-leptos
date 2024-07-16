@@ -83,7 +83,6 @@ fn main() {
             .unwrap()
             .as_string()
             .unwrap();
-        info!("{}", &input_message);
         let command = match Command::from_str(&input_message) {
             Ok(command) => command,
             Err(error) => {
@@ -97,7 +96,6 @@ fn main() {
 
         match command {
             Command::NewImage => {
-                info!("{:?}", &msg.data());
                 let center_x = Reflect::get(&msg.data(), &JsValue::from_str("center_x"))
                     .unwrap()
                     .as_f64()
@@ -124,17 +122,8 @@ fn main() {
                     image_width as u32,
                     (center_x, center_y),
                 );
-                info!("image origin: x: {},  y: {}", center_x, center_y);
-                info!(
-                    "image width: {}, image height: {}",
-                    image_width, image_height
-                );
-                info!("image data: {:?}", image_data);
-                info!("image buffer length: {:?}", image_data.len());
             }
             Command::Invert => {
-                info!("{}", Command::Invert.to_string());
-                info!("{:?}", &msg.data());
                 let should_invert = Reflect::get(
                     &msg.data(),
                     &JsValue::from_str(&Command::Invert.to_string()),
@@ -144,19 +133,16 @@ fn main() {
                 .unwrap()
                 .as_bool()
                 .unwrap();
-                info!("should invert: {:?}", should_invert);
                 let (image, width, worker_message, center_x, center_y) = {
                     let image = (*UNMODIFIED_IMAGE.lock().unwrap()).clone();
                     if image.buffer().is_empty() {
                         info!("no image selected to perform image processing");
                         return;
                     }
-                    info!("{:?}", &image);
 
                     let width = image.width();
                     let (center_x, center_y) = image.origin();
                     if should_invert {
-                        info!("inverting image");
                         (
                             algorithms::invert(image.to_vec(), width),
                             width,
@@ -207,7 +193,6 @@ fn main() {
                     &JsValue::from_f64(center_y),
                 )
                 .unwrap();
-                info!("{:?}", &output_message);
                 let array: Array = Array::new();
                 array.push(&image.buffer());
 
@@ -216,8 +201,6 @@ fn main() {
                     .unwrap();
             }
             Command::BoxBlur => {
-                info!("{}", Command::BoxBlur.to_string());
-                info!("{:?}", &msg.data());
                 let box_blur_value = Reflect::get(
                     &msg.data(),
                     &JsValue::from_str(&Command::BoxBlur.to_string()),
@@ -228,14 +211,12 @@ fn main() {
                 .as_f64()
                 .unwrap();
                 let box_blur_value = box_blur_value as u32;
-                info!("box blur value: {}", box_blur_value);
                 let (image, width, center_x, center_y) = {
                     let image = (*UNMODIFIED_IMAGE.lock().unwrap()).clone();
                     if image.buffer().is_empty() {
                         info!("no image selected to perform image processing");
                         return;
                     }
-                    info!("{:?}", &image);
                     let width = image.width();
                     let (center_x, center_y) = image.origin();
                     (
@@ -278,7 +259,6 @@ fn main() {
                     &JsValue::from_f64(center_y),
                 )
                 .unwrap();
-                info!("{:?}", &output_message);
                 let array: Array = Array::new();
                 array.push(&image.buffer());
 
@@ -287,8 +267,6 @@ fn main() {
                     .unwrap();
             }
             Command::Gamma => {
-                info!("{}", Command::Gamma.to_string());
-                info!("{:?}", &msg.data());
                 let gamma_value =
                     Reflect::get(&msg.data(), &JsValue::from_str(&Command::Gamma.to_string()))
                         .unwrap()
@@ -296,14 +274,12 @@ fn main() {
                         .unwrap()
                         .as_f64()
                         .unwrap();
-                info!("gamma value: {}", gamma_value);
                 let (image, width, center_x, center_y) = {
                     let image = (*UNMODIFIED_IMAGE.lock().unwrap()).clone();
                     if image.buffer().is_empty() {
                         info!("no image selected to perform image processing");
                         return;
                     }
-                    info!("{:?}", &image);
                     let width = image.width();
                     let (center_x, center_y) = image.origin();
                     (
@@ -346,7 +322,6 @@ fn main() {
                     &JsValue::from_f64(center_y),
                 )
                 .unwrap();
-                info!("{:?}", &output_message);
                 let array: Array = Array::new();
                 array.push(&image.buffer());
 
@@ -355,8 +330,6 @@ fn main() {
                     .unwrap();
             }
             Command::SobelEdgeDetector => {
-                info!("{}", Command::SobelEdgeDetector.to_string());
-                info!("{:?}", &msg.data());
                 let threshold = Reflect::get(
                     &msg.data(),
                     &JsValue::from_str(&Command::SobelEdgeDetector.to_string()),
@@ -367,14 +340,11 @@ fn main() {
                 .as_f64()
                 .unwrap();
                 let threshold = threshold as u32;
-                info!("sobel edge detector threshold value: {}", threshold);
                 let (image, width, center_x, center_y) = {
                     let image = (*UNMODIFIED_IMAGE.lock().unwrap()).clone();
                     if image.buffer().is_empty() {
-                        info!("no image selected to perform image processing");
                         return;
                     }
-                    info!("{:?}", &image);
                     let width = image.width();
                     let (center_x, center_y) = image.origin();
                     (
@@ -421,7 +391,6 @@ fn main() {
                     &JsValue::from_f64(center_y),
                 )
                 .unwrap();
-                info!("{:?}", &output_message);
                 let array: Array = Array::new();
                 array.push(&image.buffer());
 
