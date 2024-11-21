@@ -101,10 +101,6 @@ fn main() {
                     .unwrap()
                     .as_f64()
                     .unwrap();
-                let image_height = Reflect::get(&msg.data(), &JsValue::from_str("new_height"))
-                    .unwrap()
-                    .as_f64()
-                    .unwrap();
                 let image_data = Reflect::get(&msg.data(), &JsValue::from_str("image_data"))
                     .unwrap()
                     .dyn_into::<ArrayBuffer>()

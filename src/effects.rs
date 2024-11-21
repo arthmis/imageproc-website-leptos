@@ -2,12 +2,13 @@ use std::rc::Rc;
 use std::str::FromStr;
 
 use js_sys::{ArrayBuffer, Reflect, Uint8ClampedArray};
-use leptos::{html::Canvas, NodeRef};
+use leptos::{create_signal, html::Canvas, NodeRef, ReadSignal, SignalSet, WriteSignal};
 use log::info;
 use shared::WorkerResponseMessage;
 use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
 use web_sys::{
-    CanvasRenderingContext2d, ImageData, MessageEvent, Worker, WorkerOptions, WorkerType,
+    window, CanvasRenderingContext2d, ImageData, MediaQueryListEvent, MessageEvent, Worker,
+    WorkerOptions, WorkerType,
 };
 
 pub fn use_worker(selected_image_canvas: NodeRef<Canvas>) -> Rc<Worker> {
@@ -87,4 +88,26 @@ pub fn use_worker(selected_image_canvas: NodeRef<Canvas>) -> Rc<Worker> {
     on_worker_message.forget();
 
     worker.clone()
+}
+
+pub fn use_screen_width() -> ReadSignal<bool> {
+    let query = "(min-width: 1024px)";
+    let media_query = window().unwrap().match_media(query).unwrap().unwrap();
+    let (is_screen_desktop_size, set_is_screen_desktop_size) = create_signal(media_query.matches());
+
+    let on_screen_width_change: Closure<dyn FnMut(MediaQueryListEvent)> =
+        Closure::new(move |event: MediaQueryListEvent| {
+            // only gets called if the size changes from desktop to mobile or whatever i specified and vice versa
+            info!("{:?}", event);
+            set_is_screen_desktop_size.set(event.matches());
+        });
+    // put this in a create_effect, maybe?
+    match media_query
+        .add_event_listener_with_callback("change", on_screen_width_change.as_ref().unchecked_ref())
+    {
+        Ok(_) => on_screen_width_change.forget(),
+        Err(_) => log::error!("error setting up listener to observe screen width changes"),
+    }
+
+    is_screen_desktop_size
 }

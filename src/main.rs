@@ -7,6 +7,7 @@ use app_state::{Algorithm, AlgorithmInputState};
 use components::algorithm_selection::AlgorithmList;
 use components::navbar::NavBar;
 
+use effects::use_screen_width;
 use html::Div;
 use js_sys::Array;
 use leptos::html::{Canvas, Img, Input};
@@ -19,10 +20,7 @@ use shared::{
     SobelEdgeDetectionMessage, ToJsObject,
 };
 use views::{CurrentAlgorithm, InvisibleSelectFile};
-use web_sys::wasm_bindgen::closure::Closure;
-use web_sys::{
-    window, CanvasRenderingContext2d, HtmlCanvasElement, HtmlImageElement, MediaQueryListEvent,
-};
+use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, HtmlImageElement};
 
 fn main() {
     console_error_panic_hook::set_once();
@@ -59,7 +57,6 @@ fn App() -> impl IntoView {
     let handle_image_load = move |_ev| {
         info!("{}", "image loaded");
         let image_node = image_ref.get().unwrap();
-        let canvas_wrapper_node = canvas_wrapper.get().unwrap();
         let selected_image_canvas = selected_image_canvas.get().unwrap();
 
         // let canvas_wrapper_width = canvas_wrapper_node.client_width();
@@ -84,7 +81,7 @@ fn App() -> impl IntoView {
         // functions
         // doesn't work correctly. However if I place the value into a variable first then it works
         // no idea how this is happening
-        selected_image_canvas.set_height(new_canvas_width as u32);
+        selected_image_canvas.set_height(new_canvas_height as u32);
 
         let (scaled_width, scaled_height) =
             get_scaled_image_dimensions_to_canvas(&image_node, &selected_image_canvas);
@@ -148,7 +145,7 @@ fn App() -> impl IntoView {
         image_node.set_src(&image_url.get());
     });
 
-    create_effect(move |_| {
+    Effect::new(move |_| {
         if let Some(current_algorithm) = algorithm.get() {
             let message = match current_algorithm {
                 Algorithm::Gamma => {
@@ -178,23 +175,7 @@ fn App() -> impl IntoView {
         }
     };
 
-    let query = "(min-width: 1024px)";
-    let media_query = window().unwrap().match_media(query).unwrap().unwrap();
-    let (is_screen_desktop_size, set_is_screen_desktop_size) = create_signal(media_query.matches());
-
-    let on_screen_width_change: Closure<dyn FnMut(MediaQueryListEvent)> =
-        Closure::new(move |event: MediaQueryListEvent| {
-            // only gets called if the size changes from desktop to mobile or whatever i specified and vice versa
-            info!("{:?}", event);
-            set_is_screen_desktop_size.set(event.matches());
-        });
-    // put this in a create_effect
-    match media_query
-        .add_event_listener_with_callback("change", on_screen_width_change.as_ref().unchecked_ref())
-    {
-        Ok(_) => on_screen_width_change.forget(),
-        Err(_) => log::error!("error setting up listener to observe screen width changes"),
-    }
+    let is_screen_desktop_size = use_screen_width();
 
     let mobile_select_image_button = move || {
         if !is_screen_desktop_size.get() {
