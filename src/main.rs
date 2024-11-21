@@ -7,8 +7,7 @@ use app_state::{Algorithm, AlgorithmInputState};
 use components::algorithm_selection::AlgorithmList;
 use components::navbar::NavBar;
 
-use effects::use_screen_width;
-use html::Div;
+use effects::{use_resize, use_screen_width};
 use js_sys::Array;
 use leptos::html::{Canvas, Img, Input};
 use leptos::wasm_bindgen::JsCast;
@@ -43,13 +42,14 @@ fn App() -> impl IntoView {
     let (image_url, set_image_url) = create_signal("".to_string());
     let should_algorithm_buttons_be_disabled = Signal::derive(move || image_url.get().is_empty());
     let image_ref = create_node_ref::<Img>();
-    let canvas_wrapper = create_node_ref::<Div>();
     let selected_image_canvas = create_node_ref::<Canvas>();
     let algorithm_state = AlgorithmInputState::default();
     let gamma = algorithm_state.gamma();
     let invert = algorithm_state.invert();
     let box_blur_amount = algorithm_state.box_blur_amount();
     let sobel_edge_detector_threshold = algorithm_state.sobel_edge_detector_threshold();
+
+    use_resize(image_ref, selected_image_canvas);
 
     let worker = effects::use_worker(selected_image_canvas);
     let onload_worker = worker.clone();
@@ -216,7 +216,6 @@ fn App() -> impl IntoView {
                         <div
                             id="canvas-wrapper"
                             class="flex justify-center items-center w-full h-full grow p-4"
-                            _ref=canvas_wrapper
                         >
                             <canvas _ref=selected_image_canvas id="selected-image"></canvas>
                         </div>
@@ -249,6 +248,8 @@ fn get_scaled_image_dimensions_to_canvas(
     let canvas_client_height = canvas.client_height() as f64;
     let image_width = image_node.width() as f64;
     let image_height = image_node.height() as f64;
+    log::debug!("{}", image_width);
+    log::debug!("{}", image_height);
 
     let width_scale = canvas_client_width / image_width;
     let height_scale = canvas_client_height / image_height;

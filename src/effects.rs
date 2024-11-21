@@ -2,15 +2,71 @@ use std::rc::Rc;
 use std::str::FromStr;
 
 use js_sys::{ArrayBuffer, Reflect, Uint8ClampedArray};
-use leptos::{create_signal, html::Canvas, NodeRef, ReadSignal, SignalSet, WriteSignal};
+use leptos::{
+    create_signal,
+    html::{Canvas, Img},
+    Effect, NodeRef, ReadSignal, SignalSet,
+};
 use log::info;
 use shared::WorkerResponseMessage;
 use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
 use web_sys::{
-    window, CanvasRenderingContext2d, ImageData, MediaQueryListEvent, MessageEvent, Worker,
+    window, CanvasRenderingContext2d, Event, ImageData, MediaQueryListEvent, MessageEvent, Worker,
     WorkerOptions, WorkerType,
 };
 
+use crate::get_scaled_image_dimensions_to_canvas;
+
+pub fn use_resize(image_ref: NodeRef<Img>, selected_image_canvas: NodeRef<Canvas>) {
+    let resize_closure: Closure<dyn FnMut(Event)> = Closure::new(move |_event: Event| {
+        log::debug!("resizing");
+        let image_node = image_ref.get_untracked().unwrap();
+        let canvas = selected_image_canvas.get_untracked().unwrap();
+
+        let (scaled_width, scaled_height) =
+            get_scaled_image_dimensions_to_canvas(&image_node, &canvas);
+
+        log::debug!("width: {}, height: {}", scaled_width, scaled_height);
+        // TODO: next step
+        // think about sending a message to the worker on every resize event(debounced) and the worker
+        // will send back a copy of the original image that has potentially been modified and then resize that
+        // if I don't do that then I can try resizing the image that is already in the canvas which might be faster and hopefully better
+        let new_canvas_width = canvas.client_width();
+        let new_canvas_height = canvas.client_height();
+
+        canvas.set_width(new_canvas_width as u32);
+        // TODO: setting the height directly with using .offset_height() or any other height
+        // functions
+        // doesn't work correctly. However if I place the value into a variable first then it works
+        // no idea how this is happening
+        canvas.set_height(new_canvas_height as u32);
+
+        let center_x = (canvas.width() as f64 - scaled_width) / 2.;
+        let center_y = (canvas.height() as f64 - scaled_height) / 2.;
+        let canvas_context = canvas
+            .get_context("2d")
+            .unwrap()
+            .unwrap()
+            .dyn_into::<CanvasRenderingContext2d>()
+            .unwrap();
+        canvas_context
+            .draw_image_with_html_image_element_and_dw_and_dh(
+                &image_node,
+                center_x,
+                center_y,
+                scaled_width,
+                scaled_height,
+            )
+            .unwrap();
+    });
+
+    window()
+        .unwrap()
+        .add_event_listener_with_callback("resize", resize_closure.as_ref().unchecked_ref())
+        .unwrap();
+
+    resize_closure.forget();
+}
 pub fn use_worker(selected_image_canvas: NodeRef<Canvas>) -> Rc<Worker> {
     let on_worker_message: Closure<dyn FnMut(MessageEvent)> =
         Closure::new(move |message_event: MessageEvent| {
@@ -40,6 +96,7 @@ pub fn use_worker(selected_image_canvas: NodeRef<Canvas>) -> Rc<Worker> {
                             .as_f64()
                             .unwrap() as u32;
 
+                        log::debug!("image width: {}", width);
                         ImageData::new_with_u8_clamped_array(
                             wasm_bindgen::Clamped(&image_data.to_vec()),
                             width,
@@ -56,7 +113,8 @@ pub fn use_worker(selected_image_canvas: NodeRef<Canvas>) -> Rc<Worker> {
                             .unwrap()
                             .as_f64()
                             .unwrap();
-                    let selected_image = selected_image_canvas.get_untracked().unwrap();
+                    // let selected_image = selected_image_canvas.get_untracked().unwrap();
+                    let selected_image = selected_image_canvas.get().unwrap();
 
                     let canvas_context = selected_image
                         .get_context("2d")
@@ -65,6 +123,9 @@ pub fn use_worker(selected_image_canvas: NodeRef<Canvas>) -> Rc<Worker> {
                         .dyn_into::<CanvasRenderingContext2d>()
                         .unwrap();
 
+                    log::debug!("{}", "worker output");
+                    log::debug!("{}", selected_image.width());
+                    log::debug!("{}", selected_image.height());
                     canvas_context.clear_rect(
                         0.0,
                         0.0,
