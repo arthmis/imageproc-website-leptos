@@ -7,7 +7,6 @@ use leptos::leptos_dom::Text;
 use leptos::wasm_bindgen::JsCast;
 use leptos::*;
 use leptos::{component, create_signal, svg::view, view, IntoView};
-use leptos_use::use_media_query;
 use log::{error, info};
 use shared::{
     BoxBlurMessage, Command, GammaMessage, InvertMessage, NewImageMessage,

@@ -1,4 +1,12 @@
+mod app_state;
+mod components;
+mod effects;
+mod event_handlers;
 mod views;
+use app_state::{Algorithm, AlgorithmInputState};
+use components::algorithm_selection::AlgorithmList;
+use components::navbar::NavBar;
+
 use ev::MouseEvent;
 use html::Div;
 use js_sys::{Array, ArrayBuffer, JsString, Object, Reflect, Uint8ClampedArray};
@@ -7,7 +15,6 @@ use leptos::leptos_dom::Text;
 use leptos::wasm_bindgen::JsCast;
 use leptos::*;
 use leptos::{component, create_signal, svg::view, view, IntoView};
-use leptos_use::use_media_query;
 use log::{error, info};
 use shared::{
     BoxBlurMessage, Command, GammaMessage, InvertMessage, NewImageMessage,
@@ -15,43 +22,13 @@ use shared::{
 };
 use std::rc::Rc;
 use std::str::FromStr;
-use views::{BoxBlur, Gamma, Invert, SobelEdgeDetector};
+use views::{BoxBlur, CurrentAlgorithm, Gamma, Invert, InvisibleSelectFile, SobelEdgeDetector};
 use wasm_bindgen::JsValue;
 use web_sys::wasm_bindgen::closure::Closure;
 use web_sys::{
     window, CanvasRenderingContext2d, HtmlCanvasElement, HtmlImageElement, ImageData,
     MediaQueryListEvent, MessageEvent, Url, WorkerOptions, WorkerType,
 };
-
-mod components;
-use components::algorithm_selection::AlgorithmList;
-use components::navbar::NavBar;
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-enum Algorithm {
-    Gamma,
-    Invert,
-    BoxBlur,
-    SobelEdgeDetector,
-}
-
-impl std::fmt::Display for Algorithm {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let text = match self {
-            Algorithm::Gamma => "gamma",
-            Algorithm::Invert => "invert",
-            Algorithm::BoxBlur => "box blur",
-            Algorithm::SobelEdgeDetector => "sobel edge detector",
-        };
-        write!(f, "{}", text)
-    }
-}
-
-impl IntoView for Algorithm {
-    fn into_view(self) -> View {
-        View::Text(Text::new(self.to_string().into()))
-    }
-}
 
 fn main() {
     console_error_panic_hook::set_once();
@@ -73,95 +50,19 @@ fn App() -> impl IntoView {
     let (algorithm, set_algorithm) = create_signal(Option::None);
     let (image_url, set_image_url) = create_signal("".to_string());
     let should_algorithm_buttons_be_disabled = Signal::derive(move || image_url().is_empty());
-    let file_input_ref = create_node_ref::<Input>();
     let image_ref = create_node_ref::<Img>();
     let canvas_wrapper = create_node_ref::<Div>();
     let selected_image_canvas = create_node_ref::<Canvas>();
-    let gamma = create_rw_signal(1.);
-    let invert = create_rw_signal(false);
-    let box_blur_amount = create_rw_signal(1u32);
-    let sobel_edge_detector_threshold = create_rw_signal(128u32);
+    let algorithm_state = AlgorithmInputState::default();
+    let gamma = algorithm_state.gamma();
+    let invert = algorithm_state.invert();
+    let box_blur_amount = algorithm_state.box_blur_amount();
+    let sobel_edge_detector_threshold = algorithm_state.sobel_edge_detector_threshold();
 
-    let on_worker_message: Closure<dyn FnMut(MessageEvent)> =
-        Closure::new(move |message_event: MessageEvent| {
-            let message = &Reflect::get(&message_event.data(), &JsValue::from_str("message"))
-                .unwrap()
-                .as_string()
-                .unwrap();
-            let worker_message = WorkerResponseMessage::from_str(&message).unwrap();
-            match worker_message {
-                WorkerResponseMessage::Initialized => {
-                    info!("worker message: {}", worker_message.to_string());
-                }
-                WorkerResponseMessage::Invert
-                | WorkerResponseMessage::BoxBlur
-                | WorkerResponseMessage::Gamma
-                | WorkerResponseMessage::DisplayOriginalImage
-                | WorkerResponseMessage::SobelEdgeDetector => {
-                    let image_data = {
-                        let image_data = Uint8ClampedArray::new(
-                            &Reflect::get(&message_event.data(), &JsValue::from_str("image_data"))
-                                .unwrap()
-                                .dyn_into::<ArrayBuffer>()
-                                .unwrap(),
-                        );
-                        let width = Reflect::get(&message_event.data(), &JsValue::from_str("width"))
-                            .unwrap()
-                            .as_f64()
-                            .unwrap() as u32;
-
-                        ImageData::new_with_u8_clamped_array(
-                            wasm_bindgen::Clamped(&image_data.to_vec()),
-                            width,
-                        )
-                        .unwrap()
-                    };
-                    let center_x =
-                        Reflect::get(&message_event.data(), &JsValue::from_str("center_x"))
-                            .unwrap()
-                            .as_f64()
-                            .unwrap();
-                    let center_y =
-                        Reflect::get(&message_event.data(), &JsValue::from_str("center_y"))
-                            .unwrap()
-                            .as_f64()
-                            .unwrap();
-                    let selected_image = selected_image_canvas.get().unwrap();
-
-                    let canvas_context = selected_image
-                        .get_context("2d")
-                        .unwrap()
-                        .unwrap()
-                        .dyn_into::<CanvasRenderingContext2d>()
-                        .unwrap();
-
-                    canvas_context.clear_rect(
-                        0.0,
-                        0.0,
-                        selected_image.width() as f64,
-                        selected_image.height() as f64,
-                    );
-
-                    canvas_context
-                        .put_image_data(&image_data, center_x, center_y)
-                        .unwrap();
-                }
-                _ => {
-                    panic!("unknown worker response message: {}", worker_message);
-                }
-            }
-        });
-
-    let mut worker_options = WorkerOptions::new();
-    worker_options.type_(WorkerType::Module);
-    // look into using Refcell like in the rustwasm example
-    let worker =
-        Rc::new(web_sys::Worker::new_with_options("./worker_loader.js", &worker_options).unwrap());
-    worker.set_onmessage(Some(on_worker_message.as_ref().unchecked_ref()));
-    on_worker_message.forget();
+    let worker = effects::use_worker(selected_image_canvas);
     let onload_worker = worker.clone();
 
-    let on_image_load = move |ev| {
+    let handle_image_load = move |ev| {
         info!("{}", "image loaded");
         let image_node = image_ref.get().unwrap();
         let canvas_wrapper_node = canvas_wrapper.get().unwrap();
@@ -230,9 +131,7 @@ fn App() -> impl IntoView {
         // reset algorithm values
         // TODO look into making this a function or something
         set_algorithm(None);
-        invert.set(false);
-        box_blur_amount.set(1);
-        gamma.set(1.);
+        algorithm_state.reset();
 
         let new_image_message = NewImageMessage::new(
             Command::NewImage.to_string(),
@@ -250,15 +149,10 @@ fn App() -> impl IntoView {
             .unwrap();
     };
 
-    let on_change = move |ev| {
-        let node = file_input_ref.get().unwrap();
+    Effect::new(move |_| {
         let image_node = image_ref.get().unwrap();
-        let files = node.files().unwrap();
-        let file = files.item(0).unwrap();
-        let image_url_raw = Url::create_object_url_with_blob(&file).unwrap();
-        set_image_url(image_url_raw);
         image_node.set_src(&image_url());
-    };
+    });
 
     create_effect(move |_| match algorithm() {
         Some(current_algorithm) => match current_algorithm {
@@ -290,18 +184,7 @@ fn App() -> impl IntoView {
         None => (),
     });
 
-    let current_algorithm = move || match algorithm() {
-        Some(current_algorithm) => match current_algorithm {
-            Algorithm::Gamma => Some(view! { <Gamma gamma=gamma/> }),
-            Algorithm::Invert => Some(view! { <Invert invert=invert/> }),
-            Algorithm::BoxBlur => Some(view! { <BoxBlur box_blur_amount=box_blur_amount/> }),
-            Algorithm::SobelEdgeDetector => {
-                Some(view! { <SobelEdgeDetector threshold=sobel_edge_detector_threshold/> })
-            }
-        },
-        None => None,
-    };
-
+    let file_input_ref = create_node_ref::<Input>();
     let select_image_onclick = move |event| {
         if let Some(node) = file_input_ref.get() {
             node.click();
@@ -311,8 +194,11 @@ fn App() -> impl IntoView {
     let query = "(min-width: 1024px)";
     let media_query = window().unwrap().match_media(query).unwrap().unwrap();
     let (is_screen_desktop_size, set_is_screen_desktop_size) = create_signal(media_query.matches());
+
     let on_screen_width_change: Closure<dyn FnMut(MediaQueryListEvent)> =
         Closure::new(move |event: MediaQueryListEvent| {
+            // only gets called if the size changes from desktop to mobile or whatever i specified and vice versa
+            info!("{:?}", event);
             set_is_screen_desktop_size(event.matches());
         });
     // put this in a create_effect
@@ -350,18 +236,10 @@ fn App() -> impl IntoView {
                     class="flex p-3 justify-center items-center"
                     class=("hidden", is_screen_desktop_size)
                 >
-                    // class=("flex", is_screen_desktop_size)
-                    <input
-                        type="file"
-                        id="file-input"
-                        accept="image/png, image/jpeg"
-                        style="display: none;"
-                        _ref=file_input_ref
-                        on:change=on_change
-                    />
+                    <InvisibleSelectFile file_input_ref=file_input_ref set_image_url=set_image_url/>
                     {mobile_select_image_button}
                 </div>
-                <img _ref=image_ref src="" style="display: none" on:load=on_image_load/>
+                <img _ref=image_ref src="" style="display: none" on:load=handle_image_load/>
 
                 <div class="flex flex-col lg:flex-row lg:flex-row-reverse h-full justify-between">
                     <div class="flex flex-col w-full justify-center items-center">
@@ -373,7 +251,13 @@ fn App() -> impl IntoView {
                         >
                             <canvas _ref=selected_image_canvas id="selected-image"></canvas>
                         </div>
-                        <div>{current_algorithm}</div>
+                        <CurrentAlgorithm
+                            gamma=gamma
+                            invert=invert
+                            box_blur_amount=box_blur_amount
+                            sobel_edge_detector_threshold=sobel_edge_detector_threshold
+                            algorithm=algorithm
+                        />
                     </div>
                     <AlgorithmList
                         is_screen_desktop_size=is_screen_desktop_size
