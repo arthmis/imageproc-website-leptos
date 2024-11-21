@@ -1,21 +1,14 @@
-#![feature(lazy_cell)]
-use std::fmt;
 use std::{
-    fmt::Display,
     str::FromStr,
     sync::{LazyLock, Mutex},
 };
 
-use image_processing::pixel_ops::invert_mut;
 use shared::{algorithms, Command, WorkerResponseMessage};
 
 use js_sys::{Array, ArrayBuffer, Boolean, Number, Object, Reflect, Uint8ClampedArray};
 use log::info;
-use wasm_bindgen::{prelude::*, Clamped, JsCast};
-use web_sys::{
-    CanvasRenderingContext2d, DedicatedWorkerGlobalScope, ImageData, MessageEvent, OffscreenCanvas,
-    OffscreenCanvasRenderingContext2d,
-};
+use wasm_bindgen::{prelude::*, JsCast};
+use web_sys::{DedicatedWorkerGlobalScope, MessageEvent};
 
 /// this unmodified image will be used to perform nondestructive image processing
 /// evertime a new command comes in, this image will be cloned and then processed
@@ -161,7 +154,7 @@ fn main() {
                     }
                 };
                 let image = Uint8ClampedArray::from(image.as_ref());
-                let mut output_message = Object::new();
+                let output_message = Object::new();
 
                 Reflect::set(
                     &output_message,
@@ -227,7 +220,7 @@ fn main() {
                     )
                 };
                 let image = Uint8ClampedArray::from(image.as_ref());
-                let mut output_message = Object::new();
+                let output_message = Object::new();
 
                 Reflect::set(
                     &output_message,
@@ -290,7 +283,7 @@ fn main() {
                     )
                 };
                 let image = Uint8ClampedArray::from(image.as_ref());
-                let mut output_message = Object::new();
+                let output_message = Object::new();
 
                 Reflect::set(
                     &output_message,
@@ -355,7 +348,7 @@ fn main() {
                     )
                 };
                 let image = Uint8ClampedArray::from(image.as_ref());
-                let mut output_message = Object::new();
+                let output_message = Object::new();
 
                 Reflect::set(
                     &output_message,

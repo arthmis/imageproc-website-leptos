@@ -87,7 +87,7 @@ impl NewImageMessage {
 
 impl ToJsObject for NewImageMessage {
     fn to_js_object(self) -> Object {
-        let mut message = Object::new();
+        let message = Object::new();
         let raw_data = Uint8ClampedArray::from(self.image_data.0.as_ref());
         Reflect::set(
             &message,
@@ -142,7 +142,7 @@ impl GammaMessage {
 
 impl ToJsObject for GammaMessage {
     fn to_js_object(self) -> Object {
-        let mut message = Object::new();
+        let message = Object::new();
         Reflect::set(
             &message,
             &JsValue::from_str("message"),
@@ -172,7 +172,7 @@ impl SobelEdgeDetectionMessage {
 
 impl ToJsObject for SobelEdgeDetectionMessage {
     fn to_js_object(self) -> Object {
-        let mut message = Object::new();
+        let message = Object::new();
         Reflect::set(
             &message,
             &JsValue::from_str("message"),
@@ -205,7 +205,7 @@ impl BoxBlurMessage {
 
 impl ToJsObject for BoxBlurMessage {
     fn to_js_object(self) -> Object {
-        let mut message = Object::new();
+        let message = Object::new();
         Reflect::set(
             &message,
             &JsValue::from_str("message"),
@@ -235,7 +235,7 @@ impl InvertMessage {
 
 impl ToJsObject for InvertMessage {
     fn to_js_object(self) -> Object {
-        let mut message = Object::new();
+        let message = Object::new();
         Reflect::set(
             &message,
             &JsValue::from_str("message"),

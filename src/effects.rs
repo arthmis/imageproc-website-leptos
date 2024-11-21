@@ -2,7 +2,7 @@ use std::rc::Rc;
 use std::str::FromStr;
 
 use js_sys::{ArrayBuffer, Reflect, Uint8ClampedArray};
-use leptos::{html::Canvas, Effect, NodeRef};
+use leptos::{html::Canvas, NodeRef};
 use log::info;
 use shared::WorkerResponseMessage;
 use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
@@ -17,7 +17,7 @@ pub fn use_worker(selected_image_canvas: NodeRef<Canvas>) -> Rc<Worker> {
                 .unwrap()
                 .as_string()
                 .unwrap();
-            let worker_message = WorkerResponseMessage::from_str(&message).unwrap();
+            let worker_message = WorkerResponseMessage::from_str(message).unwrap();
             match worker_message {
                 WorkerResponseMessage::Initialized => {
                     info!("worker message: {}", worker_message.to_string());
@@ -75,13 +75,10 @@ pub fn use_worker(selected_image_canvas: NodeRef<Canvas>) -> Rc<Worker> {
                         .put_image_data(&image_data, center_x, center_y)
                         .unwrap();
                 }
-                _ => {
-                    panic!("unknown worker response message: {}", worker_message);
-                }
             }
         });
 
-    let mut worker_options = WorkerOptions::new();
+    let worker_options = WorkerOptions::new();
     worker_options.set_type(WorkerType::Module);
     // look into using Refcell like in the rustwasm example
     let worker =

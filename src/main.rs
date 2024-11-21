@@ -7,27 +7,21 @@ use app_state::{Algorithm, AlgorithmInputState};
 use components::algorithm_selection::AlgorithmList;
 use components::navbar::NavBar;
 
-use ev::MouseEvent;
 use html::Div;
-use js_sys::{Array, ArrayBuffer, JsString, Object, Reflect, Uint8ClampedArray};
-use leptos::html::{Canvas, Img, Input, ToHtmlElement};
-use leptos::leptos_dom::Text;
+use js_sys::Array;
+use leptos::html::{Canvas, Img, Input};
 use leptos::wasm_bindgen::JsCast;
 use leptos::*;
-use leptos::{component, create_signal, svg::view, view, IntoView};
-use log::{error, info};
+use leptos::{component, create_signal, view, IntoView};
+use log::info;
 use shared::{
     BoxBlurMessage, Command, GammaMessage, InvertMessage, NewImageMessage,
-    SobelEdgeDetectionMessage, ToJsObject, WorkerResponseMessage,
+    SobelEdgeDetectionMessage, ToJsObject,
 };
-use std::rc::Rc;
-use std::str::FromStr;
-use views::{BoxBlur, CurrentAlgorithm, Gamma, Invert, InvisibleSelectFile, SobelEdgeDetector};
-use wasm_bindgen::JsValue;
+use views::{CurrentAlgorithm, InvisibleSelectFile};
 use web_sys::wasm_bindgen::closure::Closure;
 use web_sys::{
-    window, CanvasRenderingContext2d, HtmlCanvasElement, HtmlImageElement, ImageData,
-    MediaQueryListEvent, MessageEvent, Url, WorkerOptions, WorkerType,
+    window, CanvasRenderingContext2d, HtmlCanvasElement, HtmlImageElement, MediaQueryListEvent,
 };
 
 fn main() {
@@ -49,7 +43,7 @@ fn main() {
 fn App() -> impl IntoView {
     let (algorithm, set_algorithm) = create_signal(Option::None);
     let (image_url, set_image_url) = create_signal("".to_string());
-    let should_algorithm_buttons_be_disabled = Signal::derive(move || image_url().is_empty());
+    let should_algorithm_buttons_be_disabled = Signal::derive(move || image_url.get().is_empty());
     let image_ref = create_node_ref::<Img>();
     let canvas_wrapper = create_node_ref::<Div>();
     let selected_image_canvas = create_node_ref::<Canvas>();
@@ -62,7 +56,7 @@ fn App() -> impl IntoView {
     let worker = effects::use_worker(selected_image_canvas);
     let onload_worker = worker.clone();
 
-    let handle_image_load = move |ev| {
+    let handle_image_load = move |_ev| {
         info!("{}", "image loaded");
         let image_node = image_ref.get().unwrap();
         let canvas_wrapper_node = canvas_wrapper.get().unwrap();
@@ -130,7 +124,7 @@ fn App() -> impl IntoView {
         // reset current algorithm to be None for a new image
         // reset algorithm values
         // TODO look into making this a function or something
-        set_algorithm(None);
+        set_algorithm.set(None);
         algorithm_state.reset();
 
         let new_image_message = NewImageMessage::new(
@@ -141,7 +135,7 @@ fn App() -> impl IntoView {
             scaled_width,
             scaled_height,
         );
-        let mut array: Array = Array::new();
+        let array: Array = Array::new();
         array.push(&new_image_message.js_clamped_uint8_array().buffer());
 
         onload_worker
@@ -151,41 +145,34 @@ fn App() -> impl IntoView {
 
     Effect::new(move |_| {
         let image_node = image_ref.get().unwrap();
-        image_node.set_src(&image_url());
+        image_node.set_src(&image_url.get());
     });
 
-    create_effect(move |_| match algorithm() {
-        Some(current_algorithm) => match current_algorithm {
-            Algorithm::Gamma => {
-                let message =
-                    GammaMessage::new(Command::Gamma.to_string(), gamma.get()).to_js_object();
-                worker.post_message(&message).unwrap();
-            }
-            Algorithm::Invert => {
-                let message =
-                    InvertMessage::new(Command::Invert.to_string(), invert.get()).to_js_object();
-                worker.post_message(&message).unwrap();
-            }
-            Algorithm::BoxBlur => {
-                let message =
+    create_effect(move |_| {
+        if let Some(current_algorithm) = algorithm.get() {
+            let message = match current_algorithm {
+                Algorithm::Gamma => {
+                    GammaMessage::new(Command::Gamma.to_string(), gamma.get()).to_js_object()
+                }
+                Algorithm::Invert => {
+                    InvertMessage::new(Command::Invert.to_string(), invert.get()).to_js_object()
+                }
+                Algorithm::BoxBlur => {
                     BoxBlurMessage::new(Command::BoxBlur.to_string(), box_blur_amount.get())
-                        .to_js_object();
-                worker.post_message(&message).unwrap();
-            }
-            Algorithm::SobelEdgeDetector => {
-                let message = SobelEdgeDetectionMessage::new(
+                        .to_js_object()
+                }
+                Algorithm::SobelEdgeDetector => SobelEdgeDetectionMessage::new(
                     Command::SobelEdgeDetector.to_string(),
                     sobel_edge_detector_threshold.get(),
                 )
-                .to_js_object();
-                worker.post_message(&message).unwrap();
-            }
-        },
-        None => (),
+                .to_js_object(),
+            };
+            worker.post_message(&message).unwrap();
+        }
     });
 
     let file_input_ref = create_node_ref::<Input>();
-    let select_image_onclick = move |event| {
+    let select_image_onclick = move |_event| {
         if let Some(node) = file_input_ref.get() {
             node.click();
         }
@@ -199,17 +186,18 @@ fn App() -> impl IntoView {
         Closure::new(move |event: MediaQueryListEvent| {
             // only gets called if the size changes from desktop to mobile or whatever i specified and vice versa
             info!("{:?}", event);
-            set_is_screen_desktop_size(event.matches());
+            set_is_screen_desktop_size.set(event.matches());
         });
     // put this in a create_effect
-    media_query.add_event_listener_with_callback(
-        "change",
-        on_screen_width_change.as_ref().unchecked_ref(),
-    );
-    on_screen_width_change.forget();
+    match media_query
+        .add_event_listener_with_callback("change", on_screen_width_change.as_ref().unchecked_ref())
+    {
+        Ok(_) => on_screen_width_change.forget(),
+        Err(_) => log::error!("error setting up listener to observe screen width changes"),
+    }
 
     let mobile_select_image_button = move || {
-        if !is_screen_desktop_size() {
+        if !is_screen_desktop_size.get() {
             // needs to be undelegated because of behavior from wasm bindgen explained here
             // https://github.com/leptos-rs/leptos/issues/2104
             Some(view! {
@@ -281,8 +269,8 @@ fn get_scaled_image_dimensions_to_canvas(
     let image_width = image_node.width() as f64;
     let image_height = image_node.height() as f64;
 
-    let width_scale = canvas_client_width as f64 / image_width as f64;
-    let height_scale = canvas_client_height as f64 / image_height as f64;
+    let width_scale = canvas_client_width / image_width;
+    let height_scale = canvas_client_height / image_height;
     let scale = if width_scale < height_scale {
         width_scale
     } else {

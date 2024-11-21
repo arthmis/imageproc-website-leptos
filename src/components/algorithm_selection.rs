@@ -1,25 +1,6 @@
-use crate::views::{BoxBlur, Gamma, Invert, SobelEdgeDetector};
 use ev::MouseEvent;
-use html::Div;
-use js_sys::{Array, ArrayBuffer, JsString, Object, Reflect, Uint8ClampedArray};
-use leptos::html::{Canvas, Img, Input, ToHtmlElement};
-use leptos::leptos_dom::Text;
-use leptos::wasm_bindgen::JsCast;
 use leptos::*;
-use leptos::{component, create_signal, svg::view, view, IntoView};
-use log::{error, info};
-use shared::{
-    BoxBlurMessage, Command, GammaMessage, InvertMessage, NewImageMessage,
-    SobelEdgeDetectionMessage, ToJsObject, WorkerResponseMessage,
-};
-use std::rc::Rc;
-use std::str::FromStr;
-use wasm_bindgen::JsValue;
-use web_sys::wasm_bindgen::closure::Closure;
-use web_sys::{
-    window, CanvasRenderingContext2d, HtmlCanvasElement, HtmlImageElement, ImageData,
-    MediaQueryListEvent, MessageEvent, Url, WorkerOptions, WorkerType,
-};
+use leptos::{component, view, IntoView};
 
 use crate::Algorithm;
 
@@ -68,7 +49,7 @@ where
                                         <li
                                             class="menu-item"
                                             on:click=move |_| {
-                                                set_algorithm(Some(algorithm));
+                                                set_algorithm.set(Some(algorithm));
                                             }
                                         >
 
@@ -91,7 +72,7 @@ where
                     .clone()
                     .into_iter()
                     .map(|algorithm| {
-                        let is_selected = move || match current_algorithm() {
+                        let is_selected = move || match current_algorithm.get() {
                             Some(current_algorithm) => current_algorithm == algorithm,
                             None => false,
                         };
@@ -104,7 +85,7 @@ where
                                     class="flex items-center justify-center w-full h-full"
                                     disabled=disabled
                                     on:click=move |_| {
-                                        set_algorithm(Some(algorithm));
+                                        set_algorithm.set(Some(algorithm));
                                     }
                                 >
 

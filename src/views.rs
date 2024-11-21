@@ -1,18 +1,10 @@
 use std::ops::Not;
-use std::rc::Rc;
-use std::thread::current;
 
-use js_sys::{Object, Reflect};
 use leptos::wasm_bindgen::JsCast;
-use leptos::{
-    component, create_node_ref, create_signal, html::Input, view, IntoView, ReadSignal, RwSignal,
-    SignalSet,
-};
+use leptos::{component, html::Input, view, IntoView, ReadSignal, RwSignal, SignalSet};
 use leptos::{NodeRef, SignalGet, WriteSignal};
-use log::{error, info};
-use shared::Command;
-use wasm_bindgen::JsValue;
-use web_sys::{Event, HtmlInputElement, InputEvent, MouseEvent, Url, Worker};
+use log::info;
+use web_sys::{Event, HtmlInputElement, MouseEvent, Url};
 
 use crate::Algorithm;
 
@@ -24,7 +16,7 @@ pub fn Gamma(gamma: RwSignal<f64>) -> impl IntoView {
     let slider = move |ev: Event| {
         let element = ev.target().unwrap().dyn_into::<HtmlInputElement>().unwrap();
         let value = element.value();
-        let value = gamma.set(value.parse::<f64>().unwrap());
+        gamma.set(value.parse::<f64>().unwrap());
         info!("sliding for gamma: {}", gamma.get());
     };
 
@@ -49,7 +41,7 @@ pub fn Gamma(gamma: RwSignal<f64>) -> impl IntoView {
 
 #[component]
 pub fn Invert(invert: RwSignal<bool>) -> impl IntoView {
-    let click = move |ev: MouseEvent| {
+    let click = move |_ev: MouseEvent| {
         invert.set(invert.get().not());
     };
     view! {
@@ -224,12 +216,12 @@ pub fn InvisibleSelectFile(
     file_input_ref: NodeRef<Input>,
     set_image_url: WriteSignal<String>,
 ) -> impl IntoView {
-    let on_change = move |ev| {
+    let on_change = move |_ev| {
         let node = file_input_ref.get().unwrap();
         let files = node.files().unwrap();
         let file = files.item(0).unwrap();
         let image_url_raw = Url::create_object_url_with_blob(&file).unwrap();
-        set_image_url(image_url_raw);
+        set_image_url.set(image_url_raw);
     };
 
     view! {
@@ -252,7 +244,7 @@ pub fn CurrentAlgorithm(
     sobel_edge_detector_threshold: RwSignal<u32>,
     algorithm: ReadSignal<Option<Algorithm>>,
 ) -> impl IntoView {
-    let current_algorithm = move || match algorithm() {
+    let current_algorithm = move || match algorithm.get() {
         Some(current_algorithm) => match current_algorithm {
             Algorithm::Gamma => Some(view! { <Gamma gamma=gamma/> }),
             Algorithm::Invert => Some(view! { <Invert invert=invert/> }),
@@ -263,5 +255,5 @@ pub fn CurrentAlgorithm(
         },
         None => None,
     };
-    view! { {current_algorithm} }
+    view! { <div>{current_algorithm}</div> }
 }
