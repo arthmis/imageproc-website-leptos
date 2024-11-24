@@ -3,6 +3,8 @@ mod components;
 mod effects;
 mod event_handlers;
 mod views;
+use std::rc::Rc;
+
 use app_state::{Algorithm, AlgorithmInputState};
 use components::algorithm_selection::AlgorithmList;
 use components::navbar::NavBar;
@@ -13,7 +15,7 @@ use leptos::html::{Canvas, Img, Input};
 use leptos::wasm_bindgen::JsCast;
 use leptos::*;
 use leptos::{component, create_signal, view, IntoView};
-use log::info;
+use log::{debug, info};
 use shared::{
     BoxBlurMessage, Command, GammaMessage, InvertMessage, NewImageMessage,
     SobelEdgeDetectionMessage, ToJsObject,
@@ -43,15 +45,24 @@ fn App() -> impl IntoView {
     let should_algorithm_buttons_be_disabled = Signal::derive(move || image_url.get().is_empty());
     let image_ref = create_node_ref::<Img>();
     let selected_image_canvas = create_node_ref::<Canvas>();
+    let offscreen_canvas = store_value(Rc::new(
+        window()
+            .document()
+            .unwrap()
+            .create_element("canvas")
+            .unwrap()
+            .dyn_into::<HtmlCanvasElement>()
+            .unwrap(),
+    ));
     let algorithm_state = AlgorithmInputState::default();
     let gamma = algorithm_state.gamma();
     let invert = algorithm_state.invert();
     let box_blur_amount = algorithm_state.box_blur_amount();
     let sobel_edge_detector_threshold = algorithm_state.sobel_edge_detector_threshold();
 
-    use_resize(image_ref, selected_image_canvas);
+    use_resize(offscreen_canvas, selected_image_canvas);
 
-    let worker = effects::use_worker(selected_image_canvas);
+    let worker = effects::use_worker(selected_image_canvas, offscreen_canvas);
     let onload_worker = worker.clone();
 
     let handle_image_load = move |_ev| {
@@ -59,12 +70,9 @@ fn App() -> impl IntoView {
         let image_node = image_ref.get().unwrap();
         let selected_image_canvas = selected_image_canvas.get().unwrap();
 
-        // let canvas_wrapper_width = canvas_wrapper_node.client_width();
-        // let canvas_wrapper_height = canvas_wrapper_node.client_height();
         let selected_image_canvas = selected_image_canvas.style("width", "100%");
         let selected_image_canvas = selected_image_canvas.style("height", "100%");
-        // let new_canvas_width = selected_image_canvas.client_width();
-        // let new_canvas_height = selected_image_canvas.client_height();
+
         let new_canvas_width = selected_image_canvas.offset_width();
         let new_canvas_height = selected_image_canvas.offset_height();
         info!(
@@ -114,9 +122,9 @@ fn App() -> impl IntoView {
             )
             .unwrap();
 
-        let image_data = canvas_context
-            .get_image_data(center_x, center_y, scaled_width, scaled_height)
-            .unwrap();
+        // let image_data = canvas_context
+        //     .get_image_data(center_x, center_y, scaled_width, scaled_height)
+        //     .unwrap();
 
         // reset current algorithm to be None for a new image
         // reset algorithm values
@@ -124,20 +132,63 @@ fn App() -> impl IntoView {
         set_algorithm.set(None);
         algorithm_state.reset();
 
-        let new_image_message = NewImageMessage::new(
-            Command::NewImage.to_string(),
-            image_data.data(),
-            center_x,
-            center_y,
-            scaled_width,
-            scaled_height,
-        );
-        let array: Array = Array::new();
-        array.push(&new_image_message.js_clamped_uint8_array().buffer());
+        // pass image into the web worker
+        {
+            let offscreen_canvas = window()
+                .document()
+                .unwrap()
+                .create_element("canvas")
+                .unwrap()
+                .dyn_into::<HtmlCanvasElement>()
+                .unwrap();
 
-        onload_worker
-            .post_message_with_transfer(&new_image_message.to_js_object(), &array)
-            .unwrap();
+            let context = offscreen_canvas
+                .get_context("2d")
+                .unwrap()
+                .unwrap()
+                .dyn_into::<CanvasRenderingContext2d>()
+                .unwrap();
+
+            let image_width = image_node.width() as f64;
+            let image_height = image_node.height() as f64;
+
+            offscreen_canvas.set_width(image_width as u32);
+            offscreen_canvas.set_height(image_height as u32);
+
+            context
+                .draw_image_with_html_image_element_and_dw_and_dh(
+                    &image_node,
+                    0.,
+                    0.,
+                    image_width,
+                    image_height,
+                )
+                .unwrap();
+
+            let data = context
+                .get_image_data(
+                    0.,
+                    0.,
+                    image_node.width() as f64,
+                    image_node.height() as f64,
+                )
+                .unwrap();
+
+            let new_image_message = NewImageMessage::new(
+                Command::NewImage.to_string(),
+                data.data(),
+                center_x,
+                center_y,
+                image_node.width() as f64,
+                image_node.height() as f64,
+            );
+            let array: Array = Array::new();
+            array.push(&new_image_message.js_clamped_uint8_array().buffer());
+
+            onload_worker
+                .post_message_with_transfer(&new_image_message.to_js_object(), &array)
+                .unwrap();
+        }
     };
 
     Effect::new(move |_| {

@@ -2,35 +2,50 @@ use std::rc::Rc;
 use std::str::FromStr;
 
 use js_sys::{ArrayBuffer, Reflect, Uint8ClampedArray};
-use leptos::{
-    create_signal,
-    html::{Canvas, Img},
-    Effect, NodeRef, ReadSignal, SignalSet,
-};
+use leptos::{create_signal, html::Canvas, NodeRef, ReadSignal, SignalSet, StoredValue};
 use log::info;
 use shared::WorkerResponseMessage;
 use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
 use web_sys::{
-    window, CanvasRenderingContext2d, Event, ImageData, MediaQueryListEvent, MessageEvent, Worker,
-    WorkerOptions, WorkerType,
+    window, CanvasRenderingContext2d, Event, HtmlCanvasElement, ImageData, MediaQueryListEvent,
+    MessageEvent, Worker, WorkerOptions, WorkerType,
 };
 
-use crate::get_scaled_image_dimensions_to_canvas;
-
-pub fn use_resize(image_ref: NodeRef<Img>, selected_image_canvas: NodeRef<Canvas>) {
+pub fn use_resize(
+    offscreen_canvas: StoredValue<Rc<HtmlCanvasElement>>,
+    selected_image_canvas: NodeRef<Canvas>,
+) {
     let resize_closure: Closure<dyn FnMut(Event)> = Closure::new(move |_event: Event| {
         log::debug!("resizing");
-        let image_node = image_ref.get_untracked().unwrap();
         let canvas = selected_image_canvas.get_untracked().unwrap();
+        let offscreen_canvas = offscreen_canvas.get_value();
+
+        // todo: maybe think about how to handle an offscreen canvas that is empty
+        // should be a no op
+        // right now the default canvas size for the offscreen canvas
+        //  is 150 x 300 so when resizing this code
+        // will just write empty pixels/white pixels to the visible canvas
+        let offscreen_ctx = offscreen_canvas
+            .get_context("2d")
+            .unwrap()
+            .unwrap()
+            .dyn_into::<CanvasRenderingContext2d>()
+            .unwrap();
+
+        let image_data = offscreen_ctx
+            .get_image_data(
+                0.,
+                0.,
+                offscreen_canvas.width() as f64,
+                offscreen_canvas.height() as f64,
+            )
+            .unwrap()
+            .dyn_into::<ImageData>()
+            .unwrap();
 
         let (scaled_width, scaled_height) =
-            get_scaled_image_dimensions_to_canvas(&image_node, &canvas);
+            get_scaled_image_buffer_for_canvas(&image_data, &selected_image_canvas);
 
-        log::debug!("width: {}, height: {}", scaled_width, scaled_height);
-        // TODO: next step
-        // think about sending a message to the worker on every resize event(debounced) and the worker
-        // will send back a copy of the original image that has potentially been modified and then resize that
-        // if I don't do that then I can try resizing the image that is already in the canvas which might be faster and hopefully better
         let new_canvas_width = canvas.client_width();
         let new_canvas_height = canvas.client_height();
 
@@ -43,6 +58,7 @@ pub fn use_resize(image_ref: NodeRef<Img>, selected_image_canvas: NodeRef<Canvas
 
         let center_x = (canvas.width() as f64 - scaled_width) / 2.;
         let center_y = (canvas.height() as f64 - scaled_height) / 2.;
+
         let canvas_context = canvas
             .get_context("2d")
             .unwrap()
@@ -50,8 +66,8 @@ pub fn use_resize(image_ref: NodeRef<Img>, selected_image_canvas: NodeRef<Canvas
             .dyn_into::<CanvasRenderingContext2d>()
             .unwrap();
         canvas_context
-            .draw_image_with_html_image_element_and_dw_and_dh(
-                &image_node,
+            .draw_image_with_html_canvas_element_and_dw_and_dh(
+                &offscreen_canvas,
                 center_x,
                 center_y,
                 scaled_width,
@@ -67,7 +83,10 @@ pub fn use_resize(image_ref: NodeRef<Img>, selected_image_canvas: NodeRef<Canvas
 
     resize_closure.forget();
 }
-pub fn use_worker(selected_image_canvas: NodeRef<Canvas>) -> Rc<Worker> {
+pub fn use_worker(
+    selected_image_canvas: NodeRef<Canvas>,
+    offscreen_canvas: StoredValue<Rc<HtmlCanvasElement>>,
+) -> Rc<Worker> {
     let on_worker_message: Closure<dyn FnMut(MessageEvent)> =
         Closure::new(move |message_event: MessageEvent| {
             let message = &Reflect::get(&message_event.data(), &JsValue::from_str("message"))
@@ -96,25 +115,26 @@ pub fn use_worker(selected_image_canvas: NodeRef<Canvas>) -> Rc<Worker> {
                             .as_f64()
                             .unwrap() as u32;
 
-                        log::debug!("image width: {}", width);
                         ImageData::new_with_u8_clamped_array(
                             wasm_bindgen::Clamped(&image_data.to_vec()),
                             width,
                         )
                         .unwrap()
                     };
-                    let center_x =
-                        Reflect::get(&message_event.data(), &JsValue::from_str("center_x"))
-                            .unwrap()
-                            .as_f64()
-                            .unwrap();
-                    let center_y =
-                        Reflect::get(&message_event.data(), &JsValue::from_str("center_y"))
-                            .unwrap()
-                            .as_f64()
-                            .unwrap();
-                    // let selected_image = selected_image_canvas.get_untracked().unwrap();
+                    // remove center_x and y from messages
+                    // let center_x =
+                    //     Reflect::get(&message_event.data(), &JsValue::from_str("center_x"))
+                    //         .unwrap()
+                    //         .as_f64()
+                    //         .unwrap();
+                    // let center_y =
+                    //     Reflect::get(&message_event.data(), &JsValue::from_str("center_y"))
+                    //         .unwrap()
+                    //         .as_f64()
+                    //         .unwrap();
                     let selected_image = selected_image_canvas.get().unwrap();
+                    let (scaled_width, scaled_height) =
+                        get_scaled_image_buffer_for_canvas(&image_data, &selected_image_canvas);
 
                     let canvas_context = selected_image
                         .get_context("2d")
@@ -123,9 +143,6 @@ pub fn use_worker(selected_image_canvas: NodeRef<Canvas>) -> Rc<Worker> {
                         .dyn_into::<CanvasRenderingContext2d>()
                         .unwrap();
 
-                    log::debug!("{}", "worker output");
-                    log::debug!("{}", selected_image.width());
-                    log::debug!("{}", selected_image.height());
                     canvas_context.clear_rect(
                         0.0,
                         0.0,
@@ -133,8 +150,29 @@ pub fn use_worker(selected_image_canvas: NodeRef<Canvas>) -> Rc<Worker> {
                         selected_image.height() as f64,
                     );
 
+                    let center_x = (selected_image.width() as f64 - scaled_width) / 2.;
+                    let center_y = (selected_image.height() as f64 - scaled_height) / 2.;
+
+                    let offscreen_canvas = offscreen_canvas.get_value();
+                    offscreen_canvas.set_width(image_data.width());
+                    offscreen_canvas.set_height(image_data.height());
+
+                    let offscreen_ctx = offscreen_canvas
+                        .get_context("2d")
+                        .unwrap()
+                        .unwrap()
+                        .dyn_into::<CanvasRenderingContext2d>()
+                        .unwrap();
+                    offscreen_ctx.put_image_data(&image_data, 0., 0.).unwrap();
+
                     canvas_context
-                        .put_image_data(&image_data, center_x, center_y)
+                        .draw_image_with_html_canvas_element_and_dw_and_dh(
+                            &offscreen_canvas,
+                            center_x,
+                            center_y,
+                            scaled_width,
+                            scaled_height,
+                        )
                         .unwrap();
                 }
             }
@@ -171,4 +209,37 @@ pub fn use_screen_width() -> ReadSignal<bool> {
     }
 
     is_screen_desktop_size
+}
+
+fn get_scaled_image_buffer_for_canvas(
+    image_data: &ImageData,
+    canvas: &NodeRef<Canvas>,
+) -> (f64, f64) {
+    let canvas = canvas.get().unwrap();
+    let canvas_client_width = canvas.client_width() as f64;
+    let canvas_client_height = canvas.client_height() as f64;
+    let image_width = image_data.width() as f64;
+    let image_height = image_data.height() as f64;
+    log::debug!("{}", image_width);
+    log::debug!("{}", image_height);
+
+    let width_scale = canvas_client_width / image_width;
+    let height_scale = canvas_client_height / image_height;
+    let scale = if width_scale < height_scale {
+        width_scale
+    } else {
+        height_scale
+    };
+
+    let (new_width, new_height) =
+        if canvas_client_width < image_width || canvas_client_height < image_height {
+            (
+                (image_width * scale).round(),
+                (image_height * scale).round(),
+            )
+        } else {
+            (image_width, image_height)
+        };
+
+    (new_width, new_height)
 }
