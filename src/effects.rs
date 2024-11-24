@@ -121,17 +121,7 @@ pub fn use_worker(
                         )
                         .unwrap()
                     };
-                    // remove center_x and y from messages
-                    // let center_x =
-                    //     Reflect::get(&message_event.data(), &JsValue::from_str("center_x"))
-                    //         .unwrap()
-                    //         .as_f64()
-                    //         .unwrap();
-                    // let center_y =
-                    //     Reflect::get(&message_event.data(), &JsValue::from_str("center_y"))
-                    //         .unwrap()
-                    //         .as_f64()
-                    //         .unwrap();
+
                     let selected_image = selected_image_canvas.get().unwrap();
                     let (scaled_width, scaled_height) =
                         get_scaled_image_buffer_for_canvas(&image_data, &selected_image_canvas);

@@ -177,8 +177,6 @@ fn App() -> impl IntoView {
             let new_image_message = NewImageMessage::new(
                 Command::NewImage.to_string(),
                 data.data(),
-                center_x,
-                center_y,
                 image_node.width() as f64,
                 image_node.height() as f64,
             );

@@ -55,8 +55,6 @@ pub trait ToJsObject {
 pub struct NewImageMessage {
     message: String,
     image_data: Clamped<Vec<u8>>,
-    center_x: f64,
-    center_y: f64,
     new_width: f64,
     new_height: f64,
 }
@@ -65,16 +63,12 @@ impl NewImageMessage {
     pub fn new(
         message: String,
         image_data: Clamped<Vec<u8>>,
-        center_x: f64,
-        center_y: f64,
         new_width: f64,
         new_height: f64,
     ) -> NewImageMessage {
         NewImageMessage {
             message,
             image_data,
-            center_x,
-            center_y,
             new_width,
             new_height,
         }
@@ -99,18 +93,6 @@ impl ToJsObject for NewImageMessage {
             &message,
             &JsValue::from_str("message"),
             &JsValue::from_str(&self.message),
-        )
-        .unwrap();
-        Reflect::set(
-            &message,
-            &JsValue::from_str("center_x"),
-            &JsValue::from_f64(self.center_x),
-        )
-        .unwrap();
-        Reflect::set(
-            &message,
-            &JsValue::from_str("center_y"),
-            &JsValue::from_f64(self.center_y),
         )
         .unwrap();
         Reflect::set(
